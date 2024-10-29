@@ -59,11 +59,11 @@ async function main() {
             } else {
                 console.log("Multiplier gas used: ", upgradeParameters.multiplierGas);
                 async function overrideFeeData() {
-                    const feedata = await ethers.provider.getFeeData();
+                    const feeData = await ethers.provider.getFeeData();
                     return new ethers.FeeData(
                         null,
-                        ((feedata.maxFeePerGas as bigint) * BigInt(upgradeParameters.multiplierGas)) / 1000n,
-                        ((feedata.maxPriorityFeePerGas as bigint) * BigInt(upgradeParameters.multiplierGas)) / 1000n
+                        ((feeData.maxFeePerGas as bigint) * BigInt(upgradeParameters.multiplierGas)) / 1000n,
+                        ((feeData.maxPriorityFeePerGas as bigint) * BigInt(upgradeParameters.multiplierGas)) / 1000n
                     );
                 }
                 currentProvider.getFeeData = overrideFeeData;
@@ -99,7 +99,7 @@ async function main() {
     // prepare upgrades
 
     // Upgrade to rollup manager
-    const PolygonRollupManagerFactory = await ethers.getContractFactory("PolygonRollupManager");
+    const PolygonRollupManagerFactory = await ethers.getContractFactory("PolygonRollupManager", deployer);
 
     const implRollupManager = await upgrades.prepareUpgrade(rollupManagerAddress, PolygonRollupManagerFactory, {
         constructorArgs: [globalExitRootManagerAddress, polAddress, bridgeAddress],

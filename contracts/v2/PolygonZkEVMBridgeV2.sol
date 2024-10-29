@@ -89,7 +89,8 @@ contract PolygonZkEVMBridgeV2 is
     bytes public gasTokenMetadata;
 
     // WETH address
-    // @note If WETH address is zero, means the gasToken of the network is ether, else means the network has a custom erc20 gas token. This value is set at initialization of the contract. In case gasTokenAddress != zero, a erc20 contract is deployed and the created address is set as WETH address, to handle wrapped ether
+    // @note WETH address will only be present  when the native token is not ether, but another gasToken.
+    // This variable is set at the initialization of the contract in case there's a gas token differnet than ether, (gasTokenAddress != address(0) ) so a new wrapped Token will be deployed to handle ether that came from other networks
     TokenWrapped public WETHToken;
 
     /**
@@ -619,7 +620,7 @@ contract PolygonZkEVMBridgeV2 is
         address destinationAddress,
         uint256 amount,
         bytes calldata metadata
-    ) external virtual ifNotEmergencyState {
+    ) external ifNotEmergencyState {
         // Destination network must be this networkID
         if (destinationNetwork != networkID) {
             revert DestinationNetworkInvalid();
@@ -932,7 +933,7 @@ contract PolygonZkEVMBridgeV2 is
         address destinationAddress,
         uint256 amount
     ) internal virtual {
-        // Burn tokens
+        // Mint tokens
         tokenWrapped.mint(destinationAddress, amount);
     }
 

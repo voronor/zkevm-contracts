@@ -121,6 +121,10 @@ contract BridgeL2SovereignChain is
 
             // Set sovereign weth token or create new if not provided
             if (_sovereignWETHAddress == address(0)) {
+                // Health check for sovereign WETH address is mintable
+                if (_sovereignWETHAddressIsNotMintable == true) {
+                    revert InvalidSovereignWETHAddressParams();
+                }
                 // Create a wrapped token for WETH, with salt == 0
                 WETHToken = _deployWrappedToken(
                     0, // salt
@@ -161,18 +165,6 @@ contract BridgeL2SovereignChain is
             revert OnlyBridgeManager();
         }
         _;
-    }
-
-    /**
-     * @notice Updated bridge manager address
-     * @param _bridgeManager Bridge manager address
-     */
-    function setBridgeManager(
-        address _bridgeManager
-    ) external onlyBridgeManager {
-        if (_bridgeManager == address(0)) revert NotValidBridgeManager();
-        bridgeManager = _bridgeManager;
-        emit SetBridgeManager(bridgeManager);
     }
 
     /**
@@ -387,6 +379,18 @@ contract BridgeL2SovereignChain is
     }
 
     /**
+     * @notice Updated bridge manager address
+     * @param _bridgeManager Bridge manager address
+     */
+    function setBridgeManager(
+        address _bridgeManager
+    ) external onlyBridgeManager {
+        if (_bridgeManager == address(0)) revert NotValidBridgeManager();
+        bridgeManager = _bridgeManager;
+        emit SetBridgeManager(bridgeManager);
+    }
+
+    /**
      * @notice Burn tokens from wrapped token to execute the bridge, if the token is not mintable it will be transferred
      * note This function has been extracted to be able to override it by other contracts like Bridge2SovereignChain
      * @param tokenWrapped Wrapped token to burnt
@@ -413,7 +417,7 @@ contract BridgeL2SovereignChain is
 
     /**
      * @notice Mints tokens from wrapped token to proceed with the claim, if the token is not mintable it will be transferred
-     * note This function has been extracted to be able to override it by other contracts like Bridge2SovereignChain
+     * note This function has been extracted to be able to override it by other contracts like BridgeL2SovereignChain
      * @param tokenWrapped Wrapped token to mint
      * @param destinationAddress Minted token receiver
      * @param amount Amount of tokens
@@ -425,13 +429,13 @@ contract BridgeL2SovereignChain is
     ) internal override {
         // If is not mintable transfer instead of mint
         if (wrappedAddressIsNotMintable[address(tokenWrapped)]) {
-            // Transfer wETH
+            // Transfer tokens
             IERC20Upgradeable(address(tokenWrapped)).safeTransfer(
                 destinationAddress,
                 amount
             );
         } else {
-            // Claim wETH
+            // Claim tokens
             tokenWrapped.mint(destinationAddress, amount);
         }
     }
@@ -439,6 +443,7 @@ contract BridgeL2SovereignChain is
     // @note This function is not used in the current implementation. We overwrite it to improve deployed bytecode size
     function activateEmergencyState()
         external
+        pure
         override(IPolygonZkEVMBridgeV2, PolygonZkEVMBridgeV2)
     {
         revert NotValidBridgeManager();
@@ -446,6 +451,7 @@ contract BridgeL2SovereignChain is
 
     function deactivateEmergencyState()
         external
+        pure
         override(IPolygonZkEVMBridgeV2, PolygonZkEVMBridgeV2)
     {
         revert NotValidBridgeManager();

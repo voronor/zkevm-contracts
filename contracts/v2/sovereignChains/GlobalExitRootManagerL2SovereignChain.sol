@@ -29,20 +29,6 @@ contract GlobalExitRootManagerL2SovereignChain is
      */
     event RemoveLastGlobalExitRoot(bytes32 indexed removedGlobalExitRoot);
 
-    modifier onlyGlobalExitRootUpdater() {
-        // Only allowed to be called by GlobalExitRootUpdater or coinbase if GlobalExitRootUpdater is zero
-        if (globalExitRootUpdater == address(0)) {
-            if (block.coinbase != msg.sender) {
-                revert OnlyGlobalExitRootUpdater();
-            }
-        } else {
-            if (globalExitRootUpdater != msg.sender) {
-                revert OnlyGlobalExitRootUpdater();
-            }
-        }
-        _;
-    }
-
     /**
      * @param _bridgeAddress PolygonZkEVMBridge contract address
      */
@@ -60,6 +46,20 @@ contract GlobalExitRootManagerL2SovereignChain is
     ) external virtual initializer {
         // set globalExitRootUpdater
         globalExitRootUpdater = _globalExitRootUpdater;
+    }
+
+    modifier onlyGlobalExitRootUpdater() {
+        // Only allowed to be called by GlobalExitRootUpdater or coinbase if GlobalExitRootUpdater is zero
+        if (globalExitRootUpdater == address(0)) {
+            if (block.coinbase != msg.sender) {
+                revert OnlyGlobalExitRootUpdater();
+            }
+        } else {
+            if (globalExitRootUpdater != msg.sender) {
+                revert OnlyGlobalExitRootUpdater();
+            }
+        }
+        _;
     }
 
     /**
