@@ -620,7 +620,7 @@ contract PolygonZkEVMBridgeV2 is
         address destinationAddress,
         uint256 amount,
         bytes calldata metadata
-    ) external virtual ifNotEmergencyState {
+    ) external ifNotEmergencyState {
         // Destination network must be this networkID
         if (destinationNetwork != networkID) {
             revert DestinationNetworkInvalid();
@@ -933,7 +933,7 @@ contract PolygonZkEVMBridgeV2 is
         address destinationAddress,
         uint256 amount
     ) internal virtual {
-        // Burn tokens
+        // Mint tokens
         tokenWrapped.mint(destinationAddress, amount);
     }
 
