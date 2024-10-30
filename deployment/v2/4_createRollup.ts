@@ -7,14 +7,13 @@ import fs = require("fs");
 import * as dotenv from "dotenv";
 dotenv.config({path: path.resolve(__dirname, "../../.env")});
 import {ethers, upgrades} from "hardhat";
-import {HardhatEthersSigner} from "@nomicfoundation/hardhat-ethers/signers";
-const {create2Deployment} = require("../helpers/deployment-helpers");
 
 const pathGenesis = path.join(__dirname, "./genesis.json");
+const pathGenesisSovereign = path.join(__dirname, "./genesis_sovereign.json");
 import {processorUtils, Constants} from "@0xpolygonhermez/zkevm-commonjs";
 
 const createRollupParameters = require("./create_rollup_parameters.json");
-let genesis = require("./genesis.json");
+let genesis = require(pathGenesis);
 const deployOutput = require("./deploy_output.json");
 import "../helpers/utils";
 import updateVanillaGenesis from "./utils/updateVanillaGenesis";
@@ -375,7 +374,6 @@ async function main() {
             rollupID: rollupID,
             gasTokenAddress,
             gasTokenNetwork,
-            globalExitRootManager: Constants.ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2,
             polygonRollupManager: ethers.ZeroAddress,
             gasTokenMetadata,
             bridgeManager: sovereignParams.bridgeManager,
@@ -463,7 +461,7 @@ async function main() {
 
     // Rewrite updated genesis in case of vanilla client
     if (isVanillaClient) {
-        fs.writeFileSync(pathGenesis, JSON.stringify(genesis, null, 1));
+        fs.writeFileSync(pathGenesisSovereign, JSON.stringify(genesis, null, 1));
     }
     fs.writeFileSync(pathOutputJson, JSON.stringify(outputJson, null, 1));
 }
