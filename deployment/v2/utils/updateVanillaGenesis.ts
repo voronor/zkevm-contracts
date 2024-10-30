@@ -3,7 +3,8 @@ import {ethers} from "hardhat";
 const {getContractAddress} = require("@ethersproject/address");
 const bridgeContractName = "BridgeL2SovereignChain";
 import {expect} from "chai";
-import {padTo32Bytes} from "./deployment-utils";
+import {padTo32Bytes, padTo20Bytes} from "./deployment-utils";
+
 async function updateVanillaGenesis(genesis, chainID, initializeParams) {
     // Load genesis on a zkEVMDB
     const poseidon = await getPoseidon();
@@ -31,8 +32,8 @@ async function updateVanillaGenesis(genesis, chainID, initializeParams) {
         type: 11,
         deltaTimestamp: 3,
         l1Info: {
-            globalExitRoot: "0x090bcaf734c4f06c93954a827b45a6e8c67b8e0fd1e0a35a1c5982d6961828f9",
-            blockHash: "0x24a5871d68723340d9eadc674aa8ad75f3e33b61d5a9db7db92af856a19270bb",
+            globalExitRoot: ethers.ZeroAddress, // Can be any value
+            blockHash: "0x24a5871d68723340d9eadc674aa8ad75f3e33b61d5a9db7db92af856a19270bb", // Can be any value
             timestamp: "42",
         },
         indexL1InfoTree: 0,
@@ -112,12 +113,14 @@ async function updateVanillaGenesis(genesis, chainID, initializeParams) {
     );
     // Add changeL2Block tx
     batch2.addRawTx(`0x${rawChangeL2BlockTx}`);
+    const gerProxy = genesis.genesis.find(function (obj) {
+        return obj.contractName == "PolygonZkEVMGlobalExitRootL2 proxy";
+    });
     // Initialize bridge
     const {
         rollupID,
         gasTokenAddress,
         gasTokenNetwork,
-        globalExitRootManager,
         polygonRollupManager,
         gasTokenMetadata,
         bridgeManager,
@@ -131,7 +134,7 @@ async function updateVanillaGenesis(genesis, chainID, initializeParams) {
             rollupID,
             gasTokenAddress,
             gasTokenNetwork,
-            globalExitRootManager,
+            gerProxy.address, // Global exit root manager address from base genesis
             polygonRollupManager,
             gasTokenMetadata,
             bridgeManager,
@@ -152,9 +155,6 @@ async function updateVanillaGenesis(genesis, chainID, initializeParams) {
     batch2.addRawTx(txInitializeBridge);
 
     // Initialize GER Manager
-    const gerProxy = genesis.genesis.find(function (obj) {
-        return obj.contractName == "PolygonZkEVMGlobalExitRootL2 proxy";
-    });
     const initializeGERData = gerFactory.interface.encodeFunctionData("initialize", [globalExitRootUpdater]);
     // Update injectedTx to initialize GER
     injectedTx.to = gerProxy.address;
@@ -175,7 +175,9 @@ async function updateVanillaGenesis(genesis, chainID, initializeParams) {
     bridgeProxy.storage = await zkEVMDB2.dumpStorage(bridgeProxy.address);
     // If bridge initialized with a zero sovereign weth address and a non zero gas token, we should add created erc20 weth contract to the genesis
     if (gasTokenAddress !== ethers.ZeroAddress && sovereignWETHAddress === ethers.ZeroAddress) {
-        const wethAddress = bridgeProxy.storage["0x000000000000000000000000000000000000000000000000000000000000006f"];
+        const wethAddress = padTo20Bytes(
+            bridgeProxy.storage["0x000000000000000000000000000000000000000000000000000000000000006f"]
+        );
         const wethGenesis = {
             contractName: "WETH",
             balance: "0",
@@ -225,7 +227,7 @@ async function updateVanillaGenesis(genesis, chainID, initializeParams) {
         );
     }
     expect(bridgeProxy.storage["0x0000000000000000000000000000000000000000000000000000000000000068"]).to.include(
-        globalExitRootManager.toLowerCase().slice(2)
+        gerProxy.address.toLowerCase().slice(2)
     );
     expect(bridgeProxy.storage["0x00000000000000000000000000000000000000000000000000000000000000a3"]).to.include(
         bridgeManager.toLowerCase().slice(2)
@@ -246,8 +248,20 @@ async function updateVanillaGenesis(genesis, chainID, initializeParams) {
     expect(gerProxy.storage["0x0000000000000000000000000000000000000000000000000000000000000034"]).to.include(
         globalExitRootUpdater.toLowerCase().slice(2)
     );
+    // Create a new zkEVM to generate a genesis an empty system address storage
+    const zkEVMDB3 = await ZkEVMDB.newZkEVM(
+        new MemDB(F),
+        poseidon,
+        genesisRoot,
+        accHashInput,
+        genesis.genesis,
+        null,
+        null,
+        chainID
+    );
     // update genesis root
-    genesis.root = smtUtils.h4toString(zkEVMDB2.getCurrentStateRoot());
+    genesis.root = smtUtils.h4toString(zkEVMDB3.getCurrentStateRoot());
+
     return genesis;
 }
 

@@ -12,6 +12,7 @@ rm -rf docker/deploymentOutput
 mkdir docker/deploymentOutput
 sudo mv deployment/v2/deploy_output.json docker/deploymentOutput
 sudo mv deployment/v2/genesis.json docker/deploymentOutput
+[ -f deployment/v2/genesis_sovereign.json ] && sudo mv deployment/v2/genesis_sovereign.json docker/deploymentOutput
 sudo mv deployment/v2/create_rollup_output.json docker/deploymentOutput
 sudo DEV_PERIOD=1 docker-compose -f docker/docker-compose.yml down
 sudo docker build -t hermeznetwork/geth-zkevm-contracts -f docker/Dockerfile .
