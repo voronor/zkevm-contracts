@@ -73,7 +73,11 @@ async function updateVanillaGenesis(genesis, chainID, initializeParams) {
     const oldBridge = genesis.genesis.find(function (obj) {
         return obj.contractName == "PolygonZkEVMBridgeV2";
     });
-    const deployGERData = await gerFactory.getDeployTransaction(oldBridge.address);
+    // Get bridge proxy address
+    const bridgeProxy = genesis.genesis.find(function (obj) {
+        return obj.contractName == "PolygonZkEVMBridgeV2 proxy";
+    });
+    const deployGERData = await gerFactory.getDeployTransaction(bridgeProxy.address);
     injectedTx.data = deployGERData.data;
     txObject = ethers.Transaction.from(injectedTx);
     const txDeployGER = processorUtils.rawTxToCustomRawTx(txObject.serialized);
@@ -142,10 +146,6 @@ async function updateVanillaGenesis(genesis, chainID, initializeParams) {
             sovereignWETHAddressIsNotMintable,
         ]
     );
-    // Get bridge proxy address
-    const bridgeProxy = genesis.genesis.find(function (obj) {
-        return obj.contractName == "PolygonZkEVMBridgeV2 proxy";
-    });
     injectedTx.to = bridgeProxy.address;
     injectedTx.data = initializeData;
     txObject = ethers.Transaction.from(injectedTx);
@@ -264,10 +264,15 @@ async function updateVanillaGenesis(genesis, chainID, initializeParams) {
             // To get the key we encode the key of the mapping with the position in the mapping
             if (sovereignWETHAddressIsNotMintable) {
                 const mappingSlot = 162; // Slot of the mapping in the bridge contract
-                const key = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["address", "uint256"], [sovereignWETHAddress, mappingSlot]));
-                expect(
-                    bridgeProxy.storage[key]
-                ).to.equal("0x0000000000000000000000000000000000000000000000000000000000000001");
+                const key = ethers.keccak256(
+                    ethers.AbiCoder.defaultAbiCoder().encode(
+                        ["address", "uint256"],
+                        [sovereignWETHAddress, mappingSlot]
+                    )
+                );
+                expect(bridgeProxy.storage[key]).to.equal(
+                    "0x0000000000000000000000000000000000000000000000000000000000000001"
+                );
             }
         } else {
             // Storage value for WETH address (ony if network with native gas token), deployed at bridge initialization
@@ -290,39 +295,39 @@ async function updateVanillaGenesis(genesis, chainID, initializeParams) {
                 "0x5745544800000000000000000000000000000000000000000000000000000008"
             );
         }
+
+        // Storage values for gasTokenMetadata, its a bytes variable
+        let offset = 2 + 64;
+        expect(bridgeProxy.storage["0x9930d9ff0dee0ef5ca2f7710ea66b8f84dd0f5f5351ecffe72b952cd9db7142a"]).to.include(
+            gasTokenMetadata.slice(2, offset)
+        );
+        expect(bridgeProxy.storage["0x9930d9ff0dee0ef5ca2f7710ea66b8f84dd0f5f5351ecffe72b952cd9db7142b"]).to.include(
+            gasTokenMetadata.slice(offset, offset + 64)
+        );
+        offset += 64;
+        expect(bridgeProxy.storage["0x9930d9ff0dee0ef5ca2f7710ea66b8f84dd0f5f5351ecffe72b952cd9db7142c"]).to.include(
+            gasTokenMetadata.slice(offset, offset + 64)
+        );
+        offset += 64;
+        expect(bridgeProxy.storage["0x9930d9ff0dee0ef5ca2f7710ea66b8f84dd0f5f5351ecffe72b952cd9db7142d"]).to.include(
+            gasTokenMetadata.slice(offset, offset + 64)
+        );
+        offset += 64;
+        expect(bridgeProxy.storage["0x9930d9ff0dee0ef5ca2f7710ea66b8f84dd0f5f5351ecffe72b952cd9db7142e"]).to.include(
+            gasTokenMetadata.slice(offset, offset + 64)
+        );
+        offset += 64;
+        expect(bridgeProxy.storage["0x9930d9ff0dee0ef5ca2f7710ea66b8f84dd0f5f5351ecffe72b952cd9db7142f"]).to.include(
+            gasTokenMetadata.slice(offset, offset + 64)
+        );
+        offset += 64;
+        expect(bridgeProxy.storage["0x9930d9ff0dee0ef5ca2f7710ea66b8f84dd0f5f5351ecffe72b952cd9db71430"]).to.include(
+            gasTokenMetadata.slice(offset, offset + 64)
+        );
     }
 
-    // Storage values for gasTokenMetadata, its a bytes variable
-    let offset = 2 + 64;
-    expect(bridgeProxy.storage["0x9930d9ff0dee0ef5ca2f7710ea66b8f84dd0f5f5351ecffe72b952cd9db7142a"]).to.include(
-        gasTokenMetadata.slice(2, offset)
-    );
-    expect(bridgeProxy.storage["0x9930d9ff0dee0ef5ca2f7710ea66b8f84dd0f5f5351ecffe72b952cd9db7142b"]).to.include(
-        gasTokenMetadata.slice(offset, offset + 64)
-    );
-    offset += 64;
-    expect(bridgeProxy.storage["0x9930d9ff0dee0ef5ca2f7710ea66b8f84dd0f5f5351ecffe72b952cd9db7142c"]).to.include(
-        gasTokenMetadata.slice(offset, offset + 64)
-    );
-    offset += 64;
-    expect(bridgeProxy.storage["0x9930d9ff0dee0ef5ca2f7710ea66b8f84dd0f5f5351ecffe72b952cd9db7142d"]).to.include(
-        gasTokenMetadata.slice(offset, offset + 64)
-    );
-    offset += 64;
-    expect(bridgeProxy.storage["0x9930d9ff0dee0ef5ca2f7710ea66b8f84dd0f5f5351ecffe72b952cd9db7142e"]).to.include(
-        gasTokenMetadata.slice(offset, offset + 64)
-    );
-    offset += 64;
-    expect(bridgeProxy.storage["0x9930d9ff0dee0ef5ca2f7710ea66b8f84dd0f5f5351ecffe72b952cd9db7142f"]).to.include(
-        gasTokenMetadata.slice(offset, offset + 64)
-    );
-    offset += 64;
-    expect(bridgeProxy.storage["0x9930d9ff0dee0ef5ca2f7710ea66b8f84dd0f5f5351ecffe72b952cd9db71430"]).to.include(
-        gasTokenMetadata.slice(offset, offset + 64)
-    );
-
-    // Check bridgeAddress is included in ger bytecode
-    expect(oldGer.bytecode).to.include(oldBridge.address.toLowerCase().slice(2));
+    // Check bridge proxy Address is included in ger bytecode
+    expect(oldGer.bytecode).to.include(bridgeProxy.address.toLowerCase().slice(2));
 
     // Update bridgeProxy storage
     gerProxy.contractName = gerContractName + " proxy";
