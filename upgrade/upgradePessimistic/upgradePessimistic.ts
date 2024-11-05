@@ -8,8 +8,7 @@ import {utils} from "ffjavascript";
 import * as dotenv from "dotenv";
 dotenv.config({path: path.resolve(__dirname, "../../.env")});
 import {ethers, upgrades} from "hardhat";
-import {PolygonRollupManager, PolygonZkEVM} from "../../typechain-types";
-import {proxy} from "../../typechain-types/@openzeppelin/contracts";
+import {PolygonRollupManager} from "../../typechain-types";
 
 const pathOutputJson = path.join(__dirname, "./upgrade_output.json");
 
