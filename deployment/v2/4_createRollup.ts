@@ -266,15 +266,13 @@ async function main() {
         createRollupParameters.gasTokenAddress !== "" &&
         createRollupParameters.gasTokenAddress !== ethers.ZeroAddress
     ) {
-        // If gas token address is "deployed" use the one from deploy parameters, erc20 deployed at prepare testnet script
-        if(createRollupParameters.gasTokenAddress == "deployed") {
-            createRollupParameters.gasTokenAddress = deployParameters.gasTokenAddress;
-        }
         // Get token metadata
         gasTokenMetadata = await polygonZkEVMBridgeContract.getTokenMetadata(createRollupParameters.gasTokenAddress);
         // If gas token metadata includes `0x124e4f545f56414c49445f454e434f44494e47 (NOT_VALID_ENCODING)` means there is no erc20 token deployed at the selected gas token network
-        if(gasTokenMetadata.includes("124e4f545f56414c49445f454e434f44494e47")) {
-            throw new Error(`Invalid gas token address, no ERC20 token deployed at the selected gas token network ${createRollupParameters.gasTokenAddress}`);
+        if (gasTokenMetadata.includes("124e4f545f56414c49445f454e434f44494e47")) {
+            throw new Error(
+                `Invalid gas token address, no ERC20 token deployed at the selected gas token network ${createRollupParameters.gasTokenAddress}`
+            );
         }
         const wrappedData = await polygonZkEVMBridgeContract.wrappedTokenToTokenInfo(
             createRollupParameters.gasTokenAddress
@@ -391,9 +389,12 @@ async function main() {
         };
         genesis = await updateVanillaGenesis(genesis, chainID, initializeParams);
         // Add weth address to deployment output if gas token address is provided and sovereignWETHAddress is not provided
-        if ( gasTokenAddress !== ethers.ZeroAddress &&
+        if (
+            gasTokenAddress !== ethers.ZeroAddress &&
             ethers.isAddress(gasTokenAddress) &&
-            (sovereignParams.sovereignWETHAddress === ethers.ZeroAddress || !ethers.isAddress(sovereignParams.sovereignWETHAddress))) {
+            (sovereignParams.sovereignWETHAddress === ethers.ZeroAddress ||
+                !ethers.isAddress(sovereignParams.sovereignWETHAddress))
+        ) {
             const wethObject = genesis.genesis.find(function (obj) {
                 return obj.contractName == "WETH";
             });

@@ -23,6 +23,7 @@ const argv = yargs(process.argv.slice(2))
 const pathDeployParameters = path.join(__dirname, argv.input);
 const deployParameters = require(argv.input);
 
+const pathCreateRollupParameters = path.join(__dirname, argv.createRollupInput);
 const createRollupParameters = require(argv.createRollupInput);
 
 async function main() {
@@ -133,19 +134,22 @@ async function main() {
 
     deployParameters.polTokenAddress = polTokenContract.target;
 
-    /*
-     * Deployment gasToken address
-     * A erc20 is deployed in this testnet in case it's wanted to deploy a rollup that uses this token as the gas token
-     */
-    const gasTokenName = "Gas Token";
-    const gasTokenSymbol = "GAS";
+    if (createRollupParameters.gasTokenAddress == "deploy") {
+        /*
+         * Deployment gasToken address
+         * A erc20 is deployed in this testnet in case it's wanted to deploy a rollup that uses this token as the gas token
+         */
+        const gasTokenName = "Gas Token";
+        const gasTokenSymbol = "GAS";
 
-    const gasTokenFactory = await ethers.getContractFactory("ERC20", deployer);
-    const gasTokenContract = await gasTokenFactory.deploy(gasTokenName, gasTokenSymbol);
-    await gasTokenContract.waitForDeployment();
-    deployParameters.gasTokenAddress = gasTokenContract.target;
-    console.log("#######################\n");
-    console.log("gas token deployed to:", gasTokenContract.target);
+        const gasTokenFactory = await ethers.getContractFactory("ERC20", deployer);
+        const gasTokenContract = await gasTokenFactory.deploy(gasTokenName, gasTokenSymbol);
+        await gasTokenContract.waitForDeployment();
+        createRollupParameters.gasTokenAddress = gasTokenContract.target;
+        console.log("#######################\n");
+        console.log("gas token deployed to:", gasTokenContract.target);
+        fs.writeFileSync(pathCreateRollupParameters, JSON.stringify(createRollupParameters, null, 1));
+    }
 
     fs.writeFileSync(pathDeployParameters, JSON.stringify(deployParameters, null, 1));
 }
