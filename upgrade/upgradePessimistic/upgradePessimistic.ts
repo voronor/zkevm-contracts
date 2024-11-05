@@ -9,6 +9,7 @@ import * as dotenv from "dotenv";
 dotenv.config({path: path.resolve(__dirname, "../../.env")});
 import {ethers, upgrades} from "hardhat";
 import {PolygonRollupManager, PolygonZkEVM} from "../../typechain-types";
+import {proxy} from "../../typechain-types/@openzeppelin/contracts";
 
 const pathOutputJson = path.join(__dirname, "./upgrade_output.json");
 
@@ -165,34 +166,28 @@ async function main() {
 
     // Decode the scheduleData for better readability
     const timelockTx = timelockContractFactory.interface.parseTransaction({data: scheduleData});
-    const paramsArray = timelockTx?.fragment.inputs;
-    const objectDecoded = {};
+    const paramsArray = timelockTx?.fragment.inputs as any;
+    const objectDecoded = {} as any;
 
     for (let i = 0; i < paramsArray?.length; i++) {
         const currentParam = paramsArray[i];
         objectDecoded[currentParam.name] = timelockTx?.args[i];
 
-        if (currentParam.name == "payloads") {
-            // for each payload
-            const payloads = timelockTx?.args[i];
-            for (let j = 0; j < payloads.length; j++) {
-                const data = payloads[j];
-                const decodedProxyAdmin = proxyAdmin.interface.parseTransaction({
-                    data,
-                });
+        if (currentParam.name == "data") {
+            const decodedProxyAdmin = proxyAdmin.interface.parseTransaction({
+                data: timelockTx?.args[i],
+            });
+            const objectDecodedData = {} as any;
+            const paramsArrayData = decodedProxyAdmin?.fragment.inputs as any;
 
-                const resultDecodeProxyAdmin = {};
-                resultDecodeProxyAdmin.signature = decodedProxyAdmin?.signature;
-                resultDecodeProxyAdmin.selector = decodedProxyAdmin?.selector;
+            objectDecodedData.signature = decodedProxyAdmin?.signature;
+            objectDecodedData.selector = decodedProxyAdmin?.selector;
 
-                const paramsArrayData = decodedProxyAdmin?.fragment.inputs;
-
-                for (let n = 0; n < paramsArrayData?.length; n++) {
-                    const currentParam = paramsArrayData[n];
-                    resultDecodeProxyAdmin[currentParam.name] = decodedProxyAdmin?.args[n];
-                }
-                objectDecoded[`decodePayload_${j}`] = resultDecodeProxyAdmin;
+            for (let j = 0; j < paramsArrayData?.length; j++) {
+                const currentParam = paramsArrayData[j];
+                objectDecodedData[currentParam.name] = decodedProxyAdmin?.args[j];
             }
+            objectDecoded["decodedData"] = objectDecodedData;
         }
     }
 
