@@ -3,6 +3,7 @@
 import {expect} from "chai";
 import path = require("path");
 import fs = require("fs");
+import {utils} from "ffjavascript";
 
 import * as dotenv from "dotenv";
 dotenv.config({path: path.resolve(__dirname, "../../.env")});
@@ -18,7 +19,7 @@ async function main() {
 
     /*
      * Check upgrade parameters
-     * Check that every necessary parameter is fullfilled
+     * Check that every necessary parameter is fulfilled
      */
     const mandatoryUpgradeParameters = ["rollupManagerAddress", "timelockDelay"];
 
@@ -39,7 +40,7 @@ async function main() {
     const bridgeAddress = await polygonRMContract.bridgeAddress();
 
     // Load provider
-    let currentProvider = ethers.provider;
+    const currentProvider = ethers.provider;
     if (upgradeParameters.multiplierGas || upgradeParameters.maxFeePerGas) {
         if (process.env.HARDHAT_NETWORK !== "hardhat") {
             currentProvider = ethers.getDefaultProvider(
@@ -59,11 +60,11 @@ async function main() {
             } else {
                 console.log("Multiplier gas used: ", upgradeParameters.multiplierGas);
                 async function overrideFeeData() {
-                    const feedata = await ethers.provider.getFeeData();
+                    const feeData = await ethers.provider.getFeeData();
                     return new ethers.FeeData(
                         null,
-                        ((feedata.maxFeePerGas as bigint) * BigInt(upgradeParameters.multiplierGas)) / 1000n,
-                        ((feedata.maxPriorityFeePerGas as bigint) * BigInt(upgradeParameters.multiplierGas)) / 1000n
+                        ((feeData.maxFeePerGas as bigint) * BigInt(upgradeParameters.multiplierGas)) / 1000n,
+                        ((feeData.maxPriorityFeePerGas as bigint) * BigInt(upgradeParameters.multiplierGas)) / 1000n
                     );
                 }
                 currentProvider.getFeeData = overrideFeeData;
@@ -96,10 +97,10 @@ async function main() {
     // load timelock
     const timelockContractFactory = await ethers.getContractFactory("PolygonZkEVMTimelock", deployer);
 
-    // prapare upgrades
+    // prepare upgrades
 
     // Upgrade to rollup manager
-    const PolygonRollupManagerFactory = await ethers.getContractFactory("PolygonRollupManager");
+    const PolygonRollupManagerFactory = await ethers.getContractFactory("PolygonRollupManager", deployer);
 
     const implRollupManager = await upgrades.prepareUpgrade(rollupManagerAddress, PolygonRollupManagerFactory, {
         constructorArgs: [globalExitRootManagerAddress, polAddress, bridgeAddress],
@@ -125,8 +126,12 @@ async function main() {
     const operationRollupManager = genOperation(
         proxyAdmin.target,
         0, // value
-        proxyAdmin.interface.encodeFunctionData("upgrade", [rollupManagerAddress, implRollupManager]),
-        ethers.ZeroHash, // predecesoor
+        proxyAdmin.interface.encodeFunctionData("upgradeAndCall", [
+            rollupManagerAddress,
+            implRollupManager,
+            PolygonRollupManagerFactory.interface.encodeFunctionData("initialize", []),
+        ]), // data
+        ethers.ZeroHash, // predecessor
         salt // salt
     );
 
@@ -135,7 +140,7 @@ async function main() {
         operationRollupManager.target,
         operationRollupManager.value,
         operationRollupManager.data,
-        ethers.ZeroHash, // predecesoor
+        ethers.ZeroHash, // predecessor
         salt, // salt
         timelockDelay,
     ]);
@@ -145,7 +150,7 @@ async function main() {
         operationRollupManager.target,
         operationRollupManager.value,
         operationRollupManager.data,
-        ethers.ZeroHash, // predecesoor
+        ethers.ZeroHash, // predecessor
         salt, // salt
     ]);
 
@@ -155,9 +160,45 @@ async function main() {
     const outputJson = {
         scheduleData,
         executeData,
-        timelockContractAdress: timelockAddress,
+        timelockContractAddress: timelockAddress,
     };
-    fs.writeFileSync(pathOutputJson, JSON.stringify(outputJson, null, 1));
+
+    // Decode the scheduleData for better readability
+    const timelockTx = timelockContractFactory.interface.parseTransaction({data: scheduleData});
+    const paramsArray = timelockTx?.fragment.inputs;
+    const objectDecoded = {};
+
+    for (let i = 0; i < paramsArray?.length; i++) {
+        const currentParam = paramsArray[i];
+        objectDecoded[currentParam.name] = timelockTx?.args[i];
+
+        if (currentParam.name == "payloads") {
+            // for each payload
+            const payloads = timelockTx?.args[i];
+            for (let j = 0; j < payloads.length; j++) {
+                const data = payloads[j];
+                const decodedProxyAdmin = proxyAdmin.interface.parseTransaction({
+                    data,
+                });
+
+                const resultDecodeProxyAdmin = {};
+                resultDecodeProxyAdmin.signature = decodedProxyAdmin?.signature;
+                resultDecodeProxyAdmin.selector = decodedProxyAdmin?.selector;
+
+                const paramsArrayData = decodedProxyAdmin?.fragment.inputs;
+
+                for (let n = 0; n < paramsArrayData?.length; n++) {
+                    const currentParam = paramsArrayData[n];
+                    resultDecodeProxyAdmin[currentParam.name] = decodedProxyAdmin?.args[n];
+                }
+                objectDecoded[`decodePayload_${j}`] = resultDecodeProxyAdmin;
+            }
+        }
+    }
+
+    outputJson.decodedScheduleData = objectDecoded;
+
+    fs.writeFileSync(pathOutputJson, JSON.stringify(utils.stringifyBigInts(outputJson), null, 1));
 }
 
 main().catch((e) => {
