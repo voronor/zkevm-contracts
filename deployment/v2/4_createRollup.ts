@@ -7,19 +7,19 @@ import fs = require("fs");
 import * as dotenv from "dotenv";
 dotenv.config({path: path.resolve(__dirname, "../../.env")});
 import {ethers, upgrades} from "hardhat";
-import {HardhatEthersSigner} from "@nomicfoundation/hardhat-ethers/signers";
-const {create2Deployment} = require("../helpers/deployment-helpers");
 
 const pathGenesis = path.join(__dirname, "./genesis.json");
+const pathGenesisSovereign = path.join(__dirname, "./genesis_sovereign.json");
 import {processorUtils, Constants} from "@0xpolygonhermez/zkevm-commonjs";
 
 const createRollupParameters = require("./create_rollup_parameters.json");
-let genesis = require("./genesis.json");
+let genesis = require(pathGenesis);
 const deployOutput = require("./deploy_output.json");
 import "../helpers/utils";
 import updateVanillaGenesis from "./utils/updateVanillaGenesis";
 
 const pathOutputJson = path.join(__dirname, "./create_rollup_output.json");
+const deployParameters = require("./deploy_parameters.json");
 
 import {
     PolygonRollupManager,
@@ -263,12 +263,19 @@ async function main() {
     ) as PolygonZkEVMBridgeV2;
     if (
         createRollupParameters.gasTokenAddress &&
-        createRollupParameters.gasTokenAddress != "" &&
-        createRollupParameters.gasTokenAddress != ethers.ZeroAddress
+        createRollupParameters.gasTokenAddress !== "" &&
+        createRollupParameters.gasTokenAddress !== ethers.ZeroAddress
     ) {
+        // If gas token address is "deployed" use the one from deploy parameters, erc20 deployed at prepare testnet script
+        if(createRollupParameters.gasTokenAddress == "deployed") {
+            createRollupParameters.gasTokenAddress = deployParameters.gasTokenAddress;
+        }
         // Get token metadata
         gasTokenMetadata = await polygonZkEVMBridgeContract.getTokenMetadata(createRollupParameters.gasTokenAddress);
-
+        // If gas token metadata includes `0x124e4f545f56414c49445f454e434f44494e47 (NOT_VALID_ENCODING)` means there is no erc20 token deployed at the selected gas token network
+        if(gasTokenMetadata.includes("124e4f545f56414c49445f454e434f44494e47")) {
+            throw new Error(`Invalid gas token address, no ERC20 token deployed at the selected gas token network ${createRollupParameters.gasTokenAddress}`);
+        }
         const wrappedData = await polygonZkEVMBridgeContract.wrappedTokenToTokenInfo(
             createRollupParameters.gasTokenAddress
         );
@@ -375,7 +382,6 @@ async function main() {
             rollupID: rollupID,
             gasTokenAddress,
             gasTokenNetwork,
-            globalExitRootManager: Constants.ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2,
             polygonRollupManager: ethers.ZeroAddress,
             gasTokenMetadata,
             bridgeManager: sovereignParams.bridgeManager,
@@ -384,6 +390,15 @@ async function main() {
             globalExitRootUpdater: sovereignParams.globalExitRootUpdater,
         };
         genesis = await updateVanillaGenesis(genesis, chainID, initializeParams);
+        // Add weth address to deployment output if gas token address is provided and sovereignWETHAddress is not provided
+        if ( gasTokenAddress !== ethers.ZeroAddress &&
+            ethers.isAddress(gasTokenAddress) &&
+            (sovereignParams.sovereignWETHAddress === ethers.ZeroAddress || !ethers.isAddress(sovereignParams.sovereignWETHAddress))) {
+            const wethObject = genesis.genesis.find(function (obj) {
+                return obj.contractName == "WETH";
+            });
+            outputJson.WETHAddress = wethObject.address;
+        }
     } else {
         if (consensusContract === "PolygonPessimisticConsensus") {
             // Add the first batch of the created rollup
@@ -463,7 +478,7 @@ async function main() {
 
     // Rewrite updated genesis in case of vanilla client
     if (isVanillaClient) {
-        fs.writeFileSync(pathGenesis, JSON.stringify(genesis, null, 1));
+        fs.writeFileSync(pathGenesisSovereign, JSON.stringify(genesis, null, 1));
     }
     fs.writeFileSync(pathOutputJson, JSON.stringify(outputJson, null, 1));
 }

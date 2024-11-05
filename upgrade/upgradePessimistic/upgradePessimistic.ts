@@ -3,6 +3,7 @@
 import {expect} from "chai";
 import path = require("path");
 import fs = require("fs");
+import {utils} from "ffjavascript";
 
 import * as dotenv from "dotenv";
 dotenv.config({path: path.resolve(__dirname, "../../.env")});
@@ -125,7 +126,11 @@ async function main() {
     const operationRollupManager = genOperation(
         proxyAdmin.target,
         0, // value
-        proxyAdmin.interface.encodeFunctionData("upgrade", [rollupManagerAddress, implRollupManager]), // data
+        proxyAdmin.interface.encodeFunctionData("upgradeAndCall", [
+            rollupManagerAddress,
+            implRollupManager,
+            PolygonRollupManagerFactory.interface.encodeFunctionData("initialize", []),
+        ]), // data
         ethers.ZeroHash, // predecessor
         salt // salt
     );
@@ -157,7 +162,43 @@ async function main() {
         executeData,
         timelockContractAddress: timelockAddress,
     };
-    fs.writeFileSync(pathOutputJson, JSON.stringify(outputJson, null, 1));
+
+    // Decode the scheduleData for better readability
+    const timelockTx = timelockContractFactory.interface.parseTransaction({data: scheduleData});
+    const paramsArray = timelockTx?.fragment.inputs;
+    const objectDecoded = {};
+
+    for (let i = 0; i < paramsArray?.length; i++) {
+        const currentParam = paramsArray[i];
+        objectDecoded[currentParam.name] = timelockTx?.args[i];
+
+        if (currentParam.name == "payloads") {
+            // for each payload
+            const payloads = timelockTx?.args[i];
+            for (let j = 0; j < payloads.length; j++) {
+                const data = payloads[j];
+                const decodedProxyAdmin = proxyAdmin.interface.parseTransaction({
+                    data,
+                });
+
+                const resultDecodeProxyAdmin = {};
+                resultDecodeProxyAdmin.signature = decodedProxyAdmin?.signature;
+                resultDecodeProxyAdmin.selector = decodedProxyAdmin?.selector;
+
+                const paramsArrayData = decodedProxyAdmin?.fragment.inputs;
+
+                for (let n = 0; n < paramsArrayData?.length; n++) {
+                    const currentParam = paramsArrayData[n];
+                    resultDecodeProxyAdmin[currentParam.name] = decodedProxyAdmin?.args[n];
+                }
+                objectDecoded[`decodePayload_${j}`] = resultDecodeProxyAdmin;
+            }
+        }
+    }
+
+    outputJson.decodedScheduleData = objectDecoded;
+
+    fs.writeFileSync(pathOutputJson, JSON.stringify(utils.stringifyBigInts(outputJson), null, 1));
 }
 
 main().catch((e) => {

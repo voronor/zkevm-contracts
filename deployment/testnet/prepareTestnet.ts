@@ -132,6 +132,21 @@ async function main() {
     }
 
     deployParameters.polTokenAddress = polTokenContract.target;
+
+    /*
+     * Deployment gasToken address
+     * A erc20 is deployed in this testnet in case it's wanted to deploy a rollup that uses this token as the gas token
+     */
+    const gasTokenName = "Gas Token";
+    const gasTokenSymbol = "GAS";
+
+    const gasTokenFactory = await ethers.getContractFactory("ERC20", deployer);
+    const gasTokenContract = await gasTokenFactory.deploy(gasTokenName, gasTokenSymbol);
+    await gasTokenContract.waitForDeployment();
+    deployParameters.gasTokenAddress = gasTokenContract.target;
+    console.log("#######################\n");
+    console.log("gas token deployed to:", gasTokenContract.target);
+
     fs.writeFileSync(pathDeployParameters, JSON.stringify(deployParameters, null, 1));
 }
 
