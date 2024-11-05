@@ -166,7 +166,7 @@
     },
     {
       "inputs": [],
-      "name": "L1InfoRootIndexInvalid",
+      "name": "L1InfoTreeLeafCountInvalid",
       "type": "error"
     },
     {
@@ -1146,7 +1146,7 @@
         },
         {
           "internalType": "uint32",
-          "name": "indexL1InfoRoot",
+          "name": "l1InfoTreeLeafCount",
           "type": "uint32"
         },
         {

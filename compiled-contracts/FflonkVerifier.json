@@ -1,7 +1,7 @@
 {
   "_format": "hh-sol-artifact-1",
-  "contractName": "FflonkVerifier",
-  "sourceName": "contracts/verifiers/FflonkVerifier.sol",
+  "contractName": "FflonkVerifier_10",
+  "sourceName": "contracts/verifiers/FflonkVerifier_10.sol",
   "abi": [
     {
       "inputs": [

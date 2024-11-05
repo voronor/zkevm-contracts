@@ -166,7 +166,7 @@
     },
     {
       "inputs": [],
-      "name": "L1InfoRootIndexInvalid",
+      "name": "L1InfoTreeLeafCountInvalid",
       "type": "error"
     },
     {
