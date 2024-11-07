@@ -42,6 +42,7 @@ const _ADMIN_SLOT = "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850
 const _IMPLEMENTATION_SLOT = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc" as any;
 
 const zkevmAddressL2 = ethers.ZeroAddress;
+const globalExitRootL2ProxyAddress = "0xa40d5f56745a118d0906a34e69aec8c0db1cb8fa";
 
 async function main() {
     // Constant variables
@@ -124,11 +125,11 @@ async function main() {
     const sovereignGenesisGERImplementation = genesisSovereign.genesis.find(function (obj) {
         return obj.contractName == "GlobalExitRootManagerL2SovereignChain";
     });
-    // Change bridge implementation address to the one set at original sovereign genesis
+    // Change bridge implementation address to the one set at original sovereign genesis. The address is different because they have different initcode
     const deployedBytecode = await ethers.provider.getCode(bridgeImplementationAddress as string);
     bridgeImplementationAddress = sovereignGenesisBridgeImplementation.address;
     await setCode(bridgeImplementationAddress as string, deployedBytecode);
-    await  setNonce(bridgeImplementationAddress as string, 1);
+    await setNonce(bridgeImplementationAddress as string, 1);
     /*
      * deploy bridge proxy and initialize
      */
@@ -153,9 +154,48 @@ async function main() {
         deployer,
         null
     );
+    // Import OZ manifest the deployed contracts, its enough to import just the proxy, the rest are imported automatically ( admin/impl)
+    await upgrades.forceImport(proxyBridgeAddress as string, sovereignBridgeFactory, "transparent" as any);
+    /*
+     *Deployment Global exit root manager implementation, proxy and initialize
+     */
+    const {sovereignParams} = createRollupParameters;
+    const globalExitRootContractName = "GlobalExitRootManagerL2SovereignChain";
+    const GERSovereignFactory = await ethers.getContractFactory(globalExitRootContractName, deployer);
+    const proxyGERContract = await upgrades.deployProxy(GERSovereignFactory, [sovereignParams.globalExitRootUpdater], {
+        constructorArgs: [proxyBridgeAddress as string],
+        unsafeAllow: ["constructor", "state-variable-immutable"],
+    });
+    const proxyGERAddress = proxyGERContract.target;
+    let GERImplementationAddress = await upgrades.erc1967.getImplementationAddress(proxyGERAddress as string);
+
+    expect(sovereignGenesisGERImplementation.bytecode).to.be.equal(
+        await ethers.provider.getCode(GERImplementationAddress)
+    );
+    // Compare storage
+    for (const key in sovereignGenesisGERProxy.storage) {
+        expect(sovereignGenesisGERProxy.storage[key]).to.be.equal(await getStorageAt(proxyGERAddress as string, key));
+    }
+    // Assert admin address
+    expect(await upgrades.erc1967.getAdminAddress(proxyGERAddress as string)).to.be.equal(proxyAdminAddress);
+    expect(await upgrades.erc1967.getAdminAddress(proxyBridgeAddress as string)).to.be.equal(proxyAdminAddress);
+
+    const timelockContractFactory = await ethers.getContractFactory("PolygonZkEVMTimelock", deployer);
+    const timelockContract = await timelockContractFactory.deploy(
+        minDelayTimelock,
+        [timelockAdminAddress],
+        [timelockAdminAddress],
+        timelockAdminAddress,
+        zkevmAddressL2
+    );
+    await timelockContract.waitForDeployment();
+    const finalTimelockContractAddress = timelockContract.target;
+
+    // Transfer ownership of the proxyAdmin to timelock
+    const proxyAdminInstance = proxyAdminFactory.attach(proxyAdminAddress as string) as ProxyAdmin;
+    await (await proxyAdminInstance.connect(deployer).transferOwnership(finalTimelockContractAddress as string)).wait();
 
     // Initialize bridge
-    const {sovereignParams} = createRollupParameters;
     const sovereignBridgeContract = sovereignBridgeFactory.attach(
         bridgeImplementationAddress as string
     ) as BridgeL2SovereignChain;
@@ -190,62 +230,15 @@ async function main() {
         data: initializeData,
     });
     // Check bytecode
-    expect(sovereignGenesisBridgeProxy.bytecode).to.be.equal(await ethers.provider.getCode(proxyBridgeAddress as string));
+    expect(sovereignGenesisBridgeProxy.bytecode).to.be.equal(
+        await ethers.provider.getCode(proxyBridgeAddress as string)
+    );
     // Check storage
     for (const key in sovereignGenesisBridgeProxy.storage) {
-        expect(sovereignGenesisBridgeProxy.storage[key]).to.be.equal(await getStorageAt(proxyBridgeAddress as string, key));
-    }
-
-    // Import OZ manifest the deployed contracts, its enough to import just the proxy, the rest are imported automatically ( admin/impl)
-    await upgrades.forceImport(proxyBridgeAddress as string, sovereignBridgeFactory, "transparent" as any);
-
-    /*
-     *Deployment Global exit root manager implementation, proxy and initialize
-     */
-    const globalExitRootContractName = "GlobalExitRootManagerL2SovereignChain";
-    const GERSovereignFactory = await ethers.getContractFactory(globalExitRootContractName, deployer);
-    const proxyGERContract = await upgrades.deployProxy(GERSovereignFactory, [sovereignParams.globalExitRootUpdater], {
-        constructorArgs: [proxyBridgeAddress as string],
-        unsafeAllow: ["constructor", "state-variable-immutable"],
-    });
-    const proxyGERAddress = proxyGERContract.target;
-    let GERImplementationAddress = await upgrades.erc1967.getImplementationAddress(proxyGERAddress as string);
-    // Change GER implementation address to the one set at original sovereign genesis
-    const deployedGERBytecode = await ethers.provider.getCode(GERImplementationAddress as string);
-    GERImplementationAddress = sovereignGenesisGERImplementation.address;
-    await setCode(GERImplementationAddress as string, deployedGERBytecode);
-    await setNonce(GERImplementationAddress as string, 1);
-    await setStorageAt(proxyGERAddress as string, "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc", `0x000000000000000000000000${GERImplementationAddress.slice(2)}`);
-    expect(sovereignGenesisGERImplementation.bytecode).to.be.equal(
-        await ethers.provider.getCode(GERImplementationAddress)
-    );
-    // Compare storage
-    for (const key in sovereignGenesisGERProxy.storage) {
-        const as = await getStorageAt(proxyGERAddress as string, key)
-        expect(sovereignGenesisGERProxy.storage[key]).to.be.equal(
-            await getStorageAt(proxyGERAddress as string, key)
+        expect(sovereignGenesisBridgeProxy.storage[key]).to.be.equal(
+            await getStorageAt(proxyBridgeAddress as string, key)
         );
     }
-    // Assert admin address
-    expect(await upgrades.erc1967.getAdminAddress(proxyGERAddress as string)).to.be.equal(
-        proxyAdminAddress
-    );
-    expect(await upgrades.erc1967.getAdminAddress(proxyBridgeAddress as string)).to.be.equal(proxyAdminAddress);
-
-    const timelockContractFactory = await ethers.getContractFactory("PolygonZkEVMTimelock", deployer);
-    const timelockContract = await timelockContractFactory.deploy(
-        minDelayTimelock,
-        [timelockAdminAddress],
-        [timelockAdminAddress],
-        timelockAdminAddress,
-        zkevmAddressL2
-    );
-    await timelockContract.waitForDeployment();
-    const finalTimelockContractAddress = timelockContract.target;
-
-    // Transfer ownership of the proxyAdmin to timelock
-    const proxyAdminInstance = proxyAdminFactory.attach(proxyAdminAddress as string) as ProxyAdmin;
-    await (await proxyAdminInstance.connect(deployer).transferOwnership(finalTimelockContractAddress as string)).wait();
 
     // Recreate genesis with the current information:
 
@@ -321,7 +314,7 @@ async function main() {
         contractName: `${globalExitRootContractName} proxy`,
         balance: "0",
         nonce: proxyGlobalExitRootL2Info.nonce.toString(),
-        address: proxyGERAddress,
+        address: globalExitRootL2ProxyAddress,
         bytecode: proxyGlobalExitRootL2Info.bytecode,
         storage: proxyGlobalExitRootL2Info.storage,
     });
@@ -393,7 +386,7 @@ async function main() {
     genesis.push({
         accountName: "deployer",
         balance: "0",
-        nonce: deployerInfo.nonce.toString(),
+        nonce: (deployerInfo.nonce + 1).toString(), // Increase nonce by 1 to match the updateVanilla Genesis script, where ger proxy is deployed and initialized in different ransactions
         address: finalDeployer,
     });
 
@@ -420,12 +413,14 @@ async function main() {
         null,
         defaultChainId
     );
-
+    // Check roots match
+    const SR = smtUtils.h4toString(zkEVMDB.stateRoot)
+    expect(SR).to.be.equal(genesisSovereign.root);
     fs.writeFileSync(
         pathOutputJson,
         JSON.stringify(
             {
-                root: smtUtils.h4toString(zkEVMDB.stateRoot),
+                root: SR,
                 genesis: genesis,
             },
             null,
