@@ -268,6 +268,7 @@ async function main() {
     ) {
         // Get token metadata
         gasTokenMetadata = await polygonZkEVMBridgeContract.getTokenMetadata(createRollupParameters.gasTokenAddress);
+        outputJson.gasTokenMetadata = gasTokenMetadata;
         // If gas token metadata includes `0x124e4f545f56414c49445f454e434f44494e47 (NOT_VALID_ENCODING)` means there is no erc20 token deployed at the selected gas token network
         if (gasTokenMetadata.includes("124e4f545f56414c49445f454e434f44494e47")) {
             throw new Error(
@@ -291,7 +292,7 @@ async function main() {
         gasTokenNetwork = 0;
         gasTokenMetadata = "0x";
     }
-
+    outputJson.gasTokenAddress = gasTokenAddress;
     const nonce = await currentProvider.getTransactionCount(rollupManagerContract.target);
     const newZKEVMAddress = ethers.getCreateAddress({
         from: rollupManagerContract.target as string,
