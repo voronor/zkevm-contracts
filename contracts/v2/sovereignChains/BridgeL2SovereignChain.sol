@@ -8,7 +8,7 @@ import "../PolygonZkEVMBridgeV2.sol";
 // WARNING: not audited
 
 /**
- * Sovereign chains bridge that will be deployed on Ethereum and all Sovereign chains
+ * Sovereign chains bridge that will be deployed on all Sovereign chains
  * Contract responsible to manage the token interactions with other networks
  */
 contract BridgeL2SovereignChain is
@@ -107,7 +107,7 @@ contract BridgeL2SovereignChain is
             // Health check for sovereign WETH address
             if (
                 _sovereignWETHAddress != address(0) ||
-                _sovereignWETHAddressIsNotMintable == true
+                _sovereignWETHAddressIsNotMintable
             ) {
                 revert InvalidSovereignWETHAddressParams();
             }
@@ -230,6 +230,7 @@ contract BridgeL2SovereignChain is
      * @notice If this function is called multiple times for the same existingTokenAddress,
      * this will override the previous calls and only keep the last sovereignTokenAddress.
      * @notice The tokenInfoToWrappedToken mapping  value is replaced by the new sovereign address but it's not the case for the wrappedTokenToTokenInfo map where the value is added, this way user will always be able to withdraw their tokens
+     * @notice The number of decimals between sovereign token and origin token is not checked, it doesn't affect the bridge functionality but the UI.
      * @param originNetwork Origin network
      * @param originTokenAddress Origin token address, 0 address is reserved for ether
      * @param sovereignTokenAddress Address of the sovereign wrapped token
@@ -288,11 +289,11 @@ contract BridgeL2SovereignChain is
      * @param sovereignTokenAddress Address of the sovereign wrapped token
      */
     function removeLegacySovereignTokenAddress(
-        address sovereignTokenAddress
+        address legacySovereignTokenAddress
     ) external onlyBridgeManager {
         // Only allow to remove already remapped tokens
         TokenInformation memory tokenInfo = wrappedTokenToTokenInfo[
-            sovereignTokenAddress
+            legacySovereignTokenAddress
         ];
         bytes32 tokenInfoHash = keccak256(
             abi.encodePacked(
@@ -303,13 +304,13 @@ contract BridgeL2SovereignChain is
 
         if (
             tokenInfoToWrappedToken[tokenInfoHash] == address(0) ||
-            tokenInfoToWrappedToken[tokenInfoHash] == sovereignTokenAddress
+            tokenInfoToWrappedToken[tokenInfoHash] == legacySovereignTokenAddress
         ) {
             revert TokenNotRemapped();
         }
-        delete wrappedTokenToTokenInfo[sovereignTokenAddress];
-        delete wrappedAddressIsNotMintable[sovereignTokenAddress];
-        emit RemoveLegacySovereignTokenAddress(sovereignTokenAddress);
+        delete wrappedTokenToTokenInfo[legacySovereignTokenAddress];
+        delete wrappedAddressIsNotMintable[legacySovereignTokenAddress];
+        emit RemoveLegacySovereignTokenAddress(legacySovereignTokenAddress);
     }
 
     /**
@@ -446,7 +447,7 @@ contract BridgeL2SovereignChain is
         pure
         override(IPolygonZkEVMBridgeV2, PolygonZkEVMBridgeV2)
     {
-        revert NotValidBridgeManager();
+        revert EmergencyStateNotAllowed();
     }
 
     function deactivateEmergencyState()
@@ -454,6 +455,6 @@ contract BridgeL2SovereignChain is
         pure
         override(IPolygonZkEVMBridgeV2, PolygonZkEVMBridgeV2)
     {
-        revert NotValidBridgeManager();
+        revert EmergencyStateNotAllowed();
     }
 }

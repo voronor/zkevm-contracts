@@ -66,6 +66,11 @@ interface IBridgeL2SovereignChains is IPolygonZkEVMBridgeV2 {
      */
     error WETHRemappingNotSupportedOnGasTokenNetworks();
 
+    /**
+     * @dev Thrown when trying to activate emergency state in a not allowed bridge context (e.g. sovereign chains)
+     */
+    error EmergencyStateNotAllowed();
+
 
     function initialize(
         uint32 _networkID,
