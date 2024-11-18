@@ -374,6 +374,20 @@ describe("BridgeL2SovereignChain Contract", () => {
             .to.emit(sovereignChainGlobalExitRootContract, "RemoveGlobalExitRoot")
             .withArgs(computedGlobalExitRoot);
 
+        // Test to remove more than one global exit root
+        expect(await sovereignChainGlobalExitRootContract.insertGlobalExitRoot(computedGlobalExitRoot))
+        .to.emit(sovereignChainGlobalExitRootContract, "InsertGlobalExitRoot")
+        .withArgs(computedGlobalExitRoot);
+        const computedGlobalExitRoot2 = "0x5946741ff5ff7732e1c7614ae327543a1d9f5870fcb8afbf146bd5ea75d6d519" // Random 32 bytes
+        expect(await sovereignChainGlobalExitRootContract.insertGlobalExitRoot(computedGlobalExitRoot2))
+        .to.emit(sovereignChainGlobalExitRootContract, "InsertGlobalExitRoot")
+        .withArgs(computedGlobalExitRoot2);
+        expect(await sovereignChainGlobalExitRootContract.globalExitRootMap(computedGlobalExitRoot2)).to.be.eq(2);
+
+        expect(await sovereignChainGlobalExitRootContract.removeLastGlobalExitRoots([computedGlobalExitRoot2, computedGlobalExitRoot]))
+            .to.emit(sovereignChainGlobalExitRootContract, "RemoveGlobalExitRoot")
+            .withArgs(computedGlobalExitRoot);
+
         // Check GER has value in mapping
         expect(await sovereignChainGlobalExitRootContract.globalExitRootMap(computedGlobalExitRoot)).to.be.eq(0);
 

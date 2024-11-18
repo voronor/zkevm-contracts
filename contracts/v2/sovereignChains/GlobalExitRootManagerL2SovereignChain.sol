@@ -103,10 +103,12 @@ contract GlobalExitRootManagerL2SovereignChain is
             // Remove from the mapping
             delete globalExitRootMap[rootToRemove];
             // Decrement the counter
-            insertedGERCount--;
+            insertedGERCountCache--;
 
             // Emit the removal event
             emit RemoveLastGlobalExitRoot(rootToRemove);
         }
+        // Update the counter
+        insertedGERCount = insertedGERCountCache;
     }
 }
