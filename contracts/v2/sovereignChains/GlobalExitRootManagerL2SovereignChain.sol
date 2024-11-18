@@ -30,6 +30,11 @@ contract GlobalExitRootManagerL2SovereignChain is
     event RemoveLastGlobalExitRoot(bytes32 indexed removedGlobalExitRoot);
 
     /**
+     * @dev Emitted when the globalExitRootUpdater is set
+     */
+    event SetGlobalExitRootUpdater(address indexed newGlobalExitRootUpdater);
+
+    /**
      * @param _bridgeAddress PolygonZkEVMBridge contract address
      */
     constructor(
@@ -110,5 +115,16 @@ contract GlobalExitRootManagerL2SovereignChain is
         }
         // Update the counter
         insertedGERCount = insertedGERCountCache;
+    }
+
+    /**
+     * @notice Set the globalExitRootUpdater
+     * @param _globalExitRootUpdater new globalExitRootUpdater address
+     */
+    function setGlobalExitRootUpdater(
+        address _globalExitRootUpdater
+    ) external onlyGlobalExitRootUpdater {
+        globalExitRootUpdater = _globalExitRootUpdater;
+        emit SetGlobalExitRootUpdater(_globalExitRootUpdater);
     }
 }
