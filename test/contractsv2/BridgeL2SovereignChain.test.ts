@@ -2163,12 +2163,12 @@ describe("BridgeL2SovereignChain Contract", () => {
     it("should test emergency state", async () => {
         await expect(sovereignChainBridgeContract.activateEmergencyState()).to.be.revertedWithCustomError(
             sovereignChainBridgeContract,
-            "NotValidBridgeManager"
+            "EmergencyStateNotAllowed"
         );
 
         await expect(sovereignChainBridgeContract.deactivateEmergencyState()).to.be.revertedWithCustomError(
             sovereignChainBridgeContract,
-            "NotValidBridgeManager"
+            "EmergencyStateNotAllowed"
         );
     });
 });
