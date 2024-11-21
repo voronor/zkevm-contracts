@@ -107,7 +107,8 @@ describe("SovereignChainBridge Gas tokens tests", () => {
             metadataToken,
             ethers.Typed.address(bridgeManager.address),
             ethers.ZeroAddress,
-            false
+            false,
+            deployer.address, // claims updater
         );
 
         // calculate the weth address:

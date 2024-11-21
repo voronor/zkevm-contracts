@@ -22,6 +22,11 @@ interface IBridgeL2SovereignChains is IPolygonZkEVMBridgeV2 {
     error OnlyBridgeManager();
 
     /**
+     * @dev Thrown when sender is not the claims updater
+     */
+    error OnlyClaimsUpdater();
+
+    /**
      * @dev Thrown when bridge manager address is invalid
      */
     error NotValidBridgeManager();
@@ -71,6 +76,10 @@ interface IBridgeL2SovereignChains is IPolygonZkEVMBridgeV2 {
      */
     error EmergencyStateNotAllowed();
 
+    /**
+     * @dev Thrown when trying to unset a not setted claim
+     */
+    error ClaimNotSet();
 
     function initialize(
         uint32 _networkID,
@@ -81,6 +90,7 @@ interface IBridgeL2SovereignChains is IPolygonZkEVMBridgeV2 {
         bytes memory _gasTokenMetadata,
         address _bridgeManager,
         address sovereignWETHAddress,
-        bool _sovereignWETHAddressIsNotMintable
+        bool _sovereignWETHAddressIsNotMintable,
+        address _claimsUpdater
     ) external;
 }

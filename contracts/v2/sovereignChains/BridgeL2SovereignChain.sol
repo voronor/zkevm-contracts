@@ -5,8 +5,6 @@ pragma solidity 0.8.20;
 import "../interfaces/IBridgeL2SovereignChains.sol";
 import "../PolygonZkEVMBridgeV2.sol";
 
-// WARNING: not audited
-
 /**
  * Sovereign chains bridge that will be deployed on all Sovereign chains
  * Contract responsible to manage the token interactions with other networks
@@ -24,10 +22,24 @@ contract BridgeL2SovereignChain is
     // Bridge manager address; can set custom mapping for any token
     address public bridgeManager;
 
+    // Claims updater address; can unset claims from claimedBitmap.
+    // In case of initializing a chain with Full execution proofs, this address should be set to zero, otherwise, some malicious sequencer could insert invalid global exit roots, claim, go back and the execution would be correctly proved.
+    address public claimsUpdater;
+
     /**
      * @dev Emitted when a bridge manager is updated
      */
     event SetBridgeManager(address bridgeManager);
+
+    /**
+     * @dev Emitted when a bridge manager is updated
+     */
+    event SetClaimsUpdater(address claimsUpdater);
+
+    /**
+     * @dev Emitted when a claim is unset
+     */
+    event UnsetClaim(uint32 leafIndex, uint32 sourceBridgeNetwork);
 
     /**
      * @dev Emitted when a token address is remapped by a sovereign token address
@@ -81,6 +93,7 @@ contract BridgeL2SovereignChain is
      * @param _bridgeManager bridge manager address
      * @param _sovereignWETHAddress sovereign WETH address
      * @param _sovereignWETHAddressIsNotMintable Flag to indicate if the wrapped ETH is not mintable
+     * @param _claimsUpdater Address that can unset claims from claimedBitmap. In case of initializing a chain with Full execution proofs, this address should be set to zero, otherwise, some malicious sequencer could insert invalid global exit roots, claim, go back and the execution would be correctly proved.
      */
     function initialize(
         uint32 _networkID,
@@ -91,12 +104,14 @@ contract BridgeL2SovereignChain is
         bytes memory _gasTokenMetadata,
         address _bridgeManager,
         address _sovereignWETHAddress,
-        bool _sovereignWETHAddressIsNotMintable
+        bool _sovereignWETHAddressIsNotMintable,
+        address _claimsUpdater
     ) public virtual initializer {
         networkID = _networkID;
         globalExitRootManager = _globalExitRootManager;
         polygonRollupManager = _polygonRollupManager;
         bridgeManager = _bridgeManager;
+        claimsUpdater = _claimsUpdater;
 
         // Set gas token
         if (_gasTokenAddress == address(0)) {
@@ -167,10 +182,20 @@ contract BridgeL2SovereignChain is
         _;
     }
 
+    modifier onlyClaimsUpdater() {
+        if (claimsUpdater != msg.sender) {
+            revert OnlyClaimsUpdater();
+        }
+        _;
+    }
+
     /**
      * @notice Remap multiple wrapped tokens to a new sovereign token address
      * @dev This function is a "multi/batch call" to `setSovereignTokenAddress`
-     * @param sovereignTokenAddresses Array of SovereignTokenAddress to remap
+     * @param originNetworks Array of Origin networks
+     * @param originTokenAddresses Array od Origin token addresses, 0 address is reserved for ether
+     * @param sovereignTokenAddresses Array of Addresses of the sovereign wrapped token
+     * @param isNotMintable Array of Flags to indicate if the wrapped token is not mintable
      */
     function setMultipleSovereignTokenAddress(
         uint32[] memory originNetworks,
@@ -195,32 +220,6 @@ contract BridgeL2SovereignChain is
                 isNotMintable[i]
             );
         }
-    }
-
-    /**
-     * @notice Remap a wrapped token to a new sovereign token address
-     * @dev This function is used to allow any existing token to be mapped with
-     *      origin token.
-     * @notice If this function is called multiple times for the same existingTokenAddress,
-     * this will override the previous calls and only keep the last sovereignTokenAddress.
-     * @notice The tokenInfoToWrappedToken mapping  value is replaced by the new sovereign address but it's not the case for the wrappedTokenToTokenInfo map where the value is added, this way user will always be able to withdraw their tokens
-     * @param originNetwork Origin network
-     * @param originTokenAddress Origin token address, 0 address is reserved for ether
-     * @param sovereignTokenAddress Address of the sovereign wrapped token
-     * @param isNotMintable Flag to indicate if the wrapped token is not mintable
-     */
-    function setSovereignTokenAddress(
-        uint32 originNetwork,
-        address originTokenAddress,
-        address sovereignTokenAddress,
-        bool isNotMintable
-    ) external onlyBridgeManager {
-        _setSovereignTokenAddress(
-            originNetwork,
-            originTokenAddress,
-            sovereignTokenAddress,
-            isNotMintable
-        );
     }
 
     /**
@@ -304,7 +303,8 @@ contract BridgeL2SovereignChain is
 
         if (
             tokenInfoToWrappedToken[tokenInfoHash] == address(0) ||
-            tokenInfoToWrappedToken[tokenInfoHash] == legacySovereignTokenAddress
+            tokenInfoToWrappedToken[tokenInfoHash] ==
+            legacySovereignTokenAddress
         ) {
             revert TokenNotRemapped();
         }
@@ -380,6 +380,25 @@ contract BridgeL2SovereignChain is
     }
 
     /**
+     * @notice unset multiple claims from the claimedBitmap
+     * @dev This function is a "multi/batch call" to `unsetClaimedBitmap`
+     * @param leafIndexes Array of Index
+     * @param sourceBridgeNetworks Array of Origin networks
+     */
+    function unsetMultipleClaimedBitmap(
+        uint32[] memory leafIndexes,
+        uint32[] memory sourceBridgeNetworks
+    ) external onlyClaimsUpdater {
+        if (leafIndexes.length != sourceBridgeNetworks.length) {
+            revert InputArraysLengthMismatch();
+        }
+
+        for (uint256 i = 0; i < leafIndexes.length; i++) {
+            _unsetClaimedBitmap(leafIndexes[i], sourceBridgeNetworks[i]);
+        }
+    }
+
+    /**
      * @notice Updated bridge manager address
      * @param _bridgeManager Bridge manager address
      */
@@ -389,6 +408,17 @@ contract BridgeL2SovereignChain is
         if (_bridgeManager == address(0)) revert NotValidBridgeManager();
         bridgeManager = _bridgeManager;
         emit SetBridgeManager(bridgeManager);
+    }
+
+    /**
+     * @notice Updated bridge manager address
+     * @param _claimsUpdater Bridge manager address
+     */
+    function setClaimsUpdater(
+        address _claimsUpdater
+    ) external onlyClaimsUpdater {
+        claimsUpdater = _claimsUpdater;
+        emit SetClaimsUpdater(claimsUpdater);
     }
 
     /**
@@ -439,6 +469,26 @@ contract BridgeL2SovereignChain is
             // Claim tokens
             tokenWrapped.mint(destinationAddress, amount);
         }
+    }
+
+    /*
+     * @notice unset a claim from the claimedBitmap
+     * @param leafIndex Index
+     * @param sourceBridgeNetwork Origin network
+     */
+    function _unsetClaimedBitmap(
+        uint32 leafIndex,
+        uint32 sourceBridgeNetwork
+    ) private {
+        (uint256 wordPos, uint256 bitPos) = _bitmapPositions(leafIndex, sourceBridgeNetwork);
+        uint256 mask = ~(1 << bitPos);
+        // Check if the bit is already unset
+        if ((claimedBitMap[wordPos] & (1 << bitPos)) == 0) {
+            revert ClaimNotSet();
+        }
+        // Use bitwise AND with the negated mask to unset the bit
+        claimedBitMap[wordPos] &= mask;
+        emit UnsetClaim(leafIndex, sourceBridgeNetwork);
     }
 
     // @note This function is not used in the current implementation. We overwrite it to improve deployed bytecode size

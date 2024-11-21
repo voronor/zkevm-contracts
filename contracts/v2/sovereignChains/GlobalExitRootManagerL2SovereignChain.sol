@@ -4,8 +4,6 @@ pragma solidity 0.8.20;
 import "../../PolygonZkEVMGlobalExitRootL2.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
-// WARNING: not audited
-
 /**
  * Contract responsible for managing the exit roots for the Sovereign chains and global exit roots
  */
@@ -15,6 +13,10 @@ contract GlobalExitRootManagerL2SovereignChain is
 {
     // globalExitRootUpdater address
     address public globalExitRootUpdater;
+
+    // globalExitRootRemover address
+    // In case of initializing a chain with Full execution proofs, this address should be set to zero, otherwise, some malicious sequencer could insert invalid global exit roots, claim, go back and the execution would be correctly proved.
+    address public globalExitRootRemover;
 
     // Inserted GER counter
     uint256 public insertedGERCount;
@@ -35,6 +37,11 @@ contract GlobalExitRootManagerL2SovereignChain is
     event SetGlobalExitRootUpdater(address indexed newGlobalExitRootUpdater);
 
     /**
+     * @dev Emitted when the globalExitRootRemover is set
+     */
+    event SetGlobalExitRootRemover(address indexed newGlobalExitRootRemover);
+
+    /**
      * @param _bridgeAddress PolygonZkEVMBridge contract address
      */
     constructor(
@@ -44,13 +51,18 @@ contract GlobalExitRootManagerL2SovereignChain is
     }
 
     /**
-     * @notice Initialize contract setting the globalExitRootUpdater
+     * @notice Initialize contract
+     * @param _globalExitRootUpdater setting the globalExitRootUpdater.
+     * @param _globalExitRootRemover In case of initializing a chain with Full execution proofs, this address should be set to zero, otherwise, some malicious sequencer could insert invalid global exit roots, claim and go back and the execution would be correctly proved.
      */
     function initialize(
-        address _globalExitRootUpdater
+        address _globalExitRootUpdater,
+        address _globalExitRootRemover
     ) external virtual initializer {
         // set globalExitRootUpdater
         globalExitRootUpdater = _globalExitRootUpdater;
+        // set globalExitRootRemover
+        globalExitRootRemover = _globalExitRootRemover;
     }
 
     modifier onlyGlobalExitRootUpdater() {
@@ -67,6 +79,13 @@ contract GlobalExitRootManagerL2SovereignChain is
         _;
     }
 
+    modifier onlyGlobalExitRootRemover() {
+        // Only allowed to be called by GlobalExitRootRemover
+        if (globalExitRootRemover != msg.sender) {
+            revert OnlyGlobalExitRootRemover();
+        }
+        _;
+    }
     /**
      * @notice Insert a new global exit root
      * @param _newRoot new global exit root to insert
@@ -89,7 +108,7 @@ contract GlobalExitRootManagerL2SovereignChain is
      */
     function removeLastGlobalExitRoots(
         bytes32[] calldata gersToRemove
-    ) external onlyGlobalExitRootUpdater {
+    ) external onlyGlobalExitRootRemover {
         uint256 insertedGERCountCache = insertedGERCount;
         // Can't remove if not enough roots have been inserted
         if (gersToRemove.length > insertedGERCountCache) {
@@ -126,5 +145,16 @@ contract GlobalExitRootManagerL2SovereignChain is
     ) external onlyGlobalExitRootUpdater {
         globalExitRootUpdater = _globalExitRootUpdater;
         emit SetGlobalExitRootUpdater(_globalExitRootUpdater);
+    }
+
+    /**
+     * @notice Set the globalExitRootRemover
+     * @param _globalExitRootRemover new globalExitRootRemover address
+     */
+    function setGlobalExitRootRemover(
+        address _globalExitRootRemover
+    ) external onlyGlobalExitRootRemover {
+        globalExitRootRemover = _globalExitRootRemover;
+        emit SetGlobalExitRootRemover(_globalExitRootRemover);
     }
 }
