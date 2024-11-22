@@ -59,6 +59,15 @@ async function main() {
         isVanillaClient,
         sovereignParams,
     } = createRollupParameters;
+
+    const supportedConsensus = ["PolygonZkEVMEtrog", "PolygonValidiumEtrog", "PolygonPessimisticConsensus"];
+
+    if (!supportedConsensus.includes(consensusContractName)) {
+        throw new Error(
+            `Consensus contract ${consensusContractName} not supported, supported contracts are: ${supportedConsensus}`
+        );
+    }
+
     // Check consensus compatibility
     if (isVanillaClient) {
         if (consensusContractName !== "PolygonPessimisticConsensus") {
@@ -70,6 +79,7 @@ async function main() {
             "sovereignWETHAddress",
             "sovereignWETHAddressIsNotMintable",
             "globalExitRootUpdater",
+            "globalExitRootRemover",
         ];
         for (const parameterName of mandatorySovereignParams) {
             if (typeof sovereignParams[parameterName] === undefined || sovereignParams[parameterName] === "") {
@@ -146,19 +156,21 @@ async function main() {
     }
 
     // Check chainID
-    const rollupID = await rollupManagerContract.chainIDToRollupID(chainID);
-    if(Number(rollupID) !== 0) {
+    let rollupID = await rollupManagerContract.chainIDToRollupID(chainID);
+    if (Number(rollupID) !== 0) {
         throw new Error(`Rollup with chainID ${chainID} already exists`);
     }
     // Check rollupTypeId
     const rollupType = await rollupManagerContract.rollupTypeMap(createRollupParameters.rollupTypeId);
     const consensusContractAddress = rollupType[0];
-    const verifierType = rollupType[3];
-    if(consensusContractName === "PolygonPessimisticConsensus") {
-        expect(verifierType).to.be.equal(1);
-    } else {
-        expect(verifierType).to.be.equal(0);
+    const verifierType = Number(rollupType[3]);
+    if (consensusContractName === "PolygonPessimisticConsensus" && verifierType !== 1) {
+        throw new Error(`Verifier type should be 1 for ${consensusContractName}`);
     }
+    if (consensusContractName !== "PolygonPessimisticConsensus" && verifierType !== 0) {
+        throw new Error(`Verifier type should be 0 for ${consensusContractName}`);
+    }
+
     // Grant role CREATE_ROLLUP_ROLE to deployer
     const CREATE_ROLLUP_ROLE = ethers.id("CREATE_ROLLUP_ROLE");
     if ((await rollupManagerContract.hasRole(CREATE_ROLLUP_ROLE, deployer.address)) == false)
@@ -172,7 +184,7 @@ async function main() {
 
     // Create new rollup
     const txDeployRollup = await rollupManagerContract.createNewRollup(
-       createRollupParameters.rollupTypeId,
+        createRollupParameters.rollupTypeId,
         chainID,
         rollupAdminAddress,
         trustedSequencer,
@@ -189,14 +201,43 @@ async function main() {
     console.log("#######################\n");
     console.log(`Created new ${consensusContractName} Rollup:`, createdRollupAddress);
 
+    // Update rollupId
+    rollupID = await rollupManagerContract.chainIDToRollupID(chainID);
+
+    const polygonConsensusFactory = (await ethers.getContractFactory(consensusContractName, deployer)) as any;
+    const dataAvailabilityProtocol = createRollupParameters.dataAvailabilityProtocol || "PolygonDataCommittee";
+    if (consensusContractName.includes("PolygonValidiumEtrog") && dataAvailabilityProtocol === "PolygonDataCommittee") {
+        // deploy data committee
+        const PolygonDataCommitteeContract = (await ethers.getContractFactory("PolygonDataCommittee", deployer)) as any;
+        let polygonDataCommittee = await upgrades.deployProxy(PolygonDataCommitteeContract, [], {
+            unsafeAllow: ["constructor"],
+        });
+        await polygonDataCommittee?.waitForDeployment();
+
+        // Load data commitee
+        const PolygonValidiumContract = (await polygonConsensusFactory.attach(
+            createdRollupAddress
+        )) as PolygonValidiumEtrog;
+        // add data commitee to the consensus contract
+        if ((await PolygonValidiumContract.admin()) == deployer.address) {
+            await (
+                await PolygonValidiumContract.setDataAvailabilityProtocol(polygonDataCommittee?.target as any)
+            ).wait();
+
+            // // Setup data commitee to 0
+            // await (await polygonDataCommittee?.setupCommittee(0, [], "0x")).wait();
+        } else {
+            await (await polygonDataCommittee?.transferOwnership(rollupAdminAddress)).wait();
+        }
+
+        outputJson.polygonDataCommitteeAddress = polygonDataCommittee?.target;
+    }
+
     // Assert admin address
     expect(await upgrades.erc1967.getAdminAddress(createdRollupAddress)).to.be.equal(rollupManagerContract.target);
-    expect(await upgrades.erc1967.getImplementationAddress(createdRollupAddress)).to.be.equal(
-        consensusContractAddress
-    );
+    expect(await upgrades.erc1967.getImplementationAddress(createdRollupAddress)).to.be.equal(consensusContractAddress);
 
     // Search added global exit root on the logs
-    const polygonConsensusFactory = (await ethers.getContractFactory(consensusContractName, deployer)) as any;
     let globalExitRoot;
     for (const log of receipt?.logs) {
         if (log.address == createdRollupAddress) {
@@ -212,9 +253,7 @@ async function main() {
     // Get bridge instance
     const bridgeFactory = await ethers.getContractFactory("PolygonZkEVMBridgeV2", deployer);
     const bridgeContractAddress = await rollupManagerContract.bridgeAddress();
-    const rollupBridgeContract = bridgeFactory.attach(
-        bridgeContractAddress
-    ) as PolygonZkEVMBridgeV2;
+    const rollupBridgeContract = bridgeFactory.attach(bridgeContractAddress) as PolygonZkEVMBridgeV2;
     if (
         ethers.isAddress(createRollupParameters.gasTokenAddress) &&
         createRollupParameters.gasTokenAddress !== ethers.ZeroAddress
@@ -228,9 +267,7 @@ async function main() {
                 `Invalid gas token address, no ERC20 token deployed at the selected gas token network ${createRollupParameters.gasTokenAddress}`
             );
         }
-        const wrappedData = await rollupBridgeContract.wrappedTokenToTokenInfo(
-            createRollupParameters.gasTokenAddress
-        );
+        const wrappedData = await rollupBridgeContract.wrappedTokenToTokenInfo(createRollupParameters.gasTokenAddress);
         if (wrappedData.originNetwork != 0n) {
             // Wrapped token
             gasTokenAddress = wrappedData.originTokenAddress;
@@ -259,6 +296,7 @@ async function main() {
             sovereignWETHAddress: sovereignParams.sovereignWETHAddress,
             sovereignWETHAddressIsNotMintable: sovereignParams.sovereignWETHAddressIsNotMintable,
             globalExitRootUpdater: sovereignParams.globalExitRootUpdater,
+            globalExitRootRemover: sovereignParams.globalExitRootRemover,
         };
         genesis = await updateVanillaGenesis(genesis, chainID, initializeParams);
         // Add weth address to deployment output if gas token address is provided and sovereignWETHAddress is not provided
