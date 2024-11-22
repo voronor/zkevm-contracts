@@ -68,7 +68,7 @@ describe("BridgeL2SovereignChain Contract", () => {
         );
         sovereignChainGlobalExitRootContract = (await upgrades.deployProxy(
             GlobalExitRootManagerL2SovereignChainFactory,
-            [ethers.ZeroAddress], // Initializer params
+            [ethers.ZeroAddress, deployer.address], // Initializer params
             {
                 initializer: "initialize", // initializer function name
                 constructorArgs: [sovereignChainBridgeContract.target], // Constructor arguments
@@ -98,7 +98,6 @@ describe("BridgeL2SovereignChain Contract", () => {
             ethers.Typed.address(bridgeManager),
             ethers.ZeroAddress,
             false,
-            deployer.address // claims updater
         );
 
         // deploy token
@@ -131,7 +130,6 @@ describe("BridgeL2SovereignChain Contract", () => {
                 ethers.Typed.address(bridgeManager.address),
                 ethers.ZeroAddress,
                 false,
-                deployer.address // claims updater
             )
         ).to.be.revertedWithCustomError(sovereignChainBridgeContract, "GasTokenNetworkMustBeZeroOnEther");
 
@@ -147,7 +145,6 @@ describe("BridgeL2SovereignChain Contract", () => {
                 ethers.Typed.address(bridgeManager.address),
                 bridge.target, // Not zero, revert
                 false,
-                deployer.address // claims updater
             )
         ).to.be.revertedWithCustomError(sovereignChainBridgeContract, "InvalidSovereignWETHAddressParams");
 
@@ -162,7 +159,6 @@ describe("BridgeL2SovereignChain Contract", () => {
                 ethers.Typed.address(bridgeManager.address),
                 ethers.ZeroAddress,
                 true, // Not false, revert,
-                deployer.address // claims updater
             )
         ).to.be.revertedWithCustomError(sovereignChainBridgeContract, "InvalidSovereignWETHAddressParams");
     });
@@ -188,11 +184,11 @@ describe("BridgeL2SovereignChain Contract", () => {
         // Make first remapping
         await sovereignChainBridgeContract
             .connect(bridgeManager)
-            .setSovereignTokenAddress(networkIDRollup1, polTokenContract.target, legacyToken.target, true);
+            .setMultipleSovereignTokenAddress([networkIDRollup1], [polTokenContract.target], [legacyToken.target], [true]);
         await expect(
             sovereignChainBridgeContract
                 .connect(bridgeManager)
-                .setSovereignTokenAddress(networkIDRollup1, polTokenContract.target, legacyToken.target, true)
+                .setMultipleSovereignTokenAddress([networkIDRollup1], [polTokenContract.target], [legacyToken.target], [true])
         ).to.revertedWithCustomError(sovereignChainBridgeContract, "TokenAlreadyMapped");
         // Deploy token 2
         const updatedToken = await tokenFactory.deploy(tokenName, tokenSymbol, deployer.address, iBalance);
@@ -202,7 +198,7 @@ describe("BridgeL2SovereignChain Contract", () => {
         // Make second remapping
         await sovereignChainBridgeContract
             .connect(bridgeManager)
-            .setSovereignTokenAddress(networkIDRollup1, polTokenContract.target, updatedToken.target, true);
+            .setMultipleSovereignTokenAddress([networkIDRollup1], [polTokenContract.target], [updatedToken.target], [true]);
 
         // Try migrate a token already updated
         await expect(
@@ -268,7 +264,7 @@ describe("BridgeL2SovereignChain Contract", () => {
         await expect(
             sovereignChainBridgeContract
                 .connect(bridgeManager)
-                .setSovereignTokenAddress(networkIDRollup, tokenAddress, sovereignToken.target, true)
+                .setMultipleSovereignTokenAddress([networkIDRollup], [tokenAddress], [sovereignToken.target], [true])
         )
             .to.emit(sovereignChainBridgeContract, "SetSovereignTokenAddress")
             .withArgs(networkIDRollup, tokenAddress, sovereignToken.target, true);
@@ -373,6 +369,16 @@ describe("BridgeL2SovereignChain Contract", () => {
             sovereignChainGlobalExitRootContract.removeLastGlobalExitRoots([metadataHash])
         ).to.revertedWithCustomError(sovereignChainGlobalExitRootContract, "NotLastInsertedGlobalExitRoot");
 
+        // Trigger OnlyGlobalExitRootRemover
+        await expect(
+            sovereignChainGlobalExitRootContract.connect(rollupManager).removeLastGlobalExitRoots([metadataHash])
+        ).to.revertedWithCustomError(sovereignChainGlobalExitRootContract, "OnlyGlobalExitRootRemover");
+
+        // Update globalExitRootRemover
+        await sovereignChainGlobalExitRootContract.setGlobalExitRootRemover(deployer.address);
+        // Update globalExitRootUpdater
+        await sovereignChainGlobalExitRootContract.setGlobalExitRootUpdater(deployer.address);
+
         // Remove global exit root
         expect(await sovereignChainGlobalExitRootContract.removeLastGlobalExitRoots([computedGlobalExitRoot]))
             .to.emit(sovereignChainGlobalExitRootContract, "RemoveGlobalExitRoot")
@@ -424,7 +430,7 @@ describe("BridgeL2SovereignChain Contract", () => {
         await expect(
             sovereignChainBridgeContract
                 .connect(bridgeManager)
-                .setSovereignTokenAddress(networkIDRollup, tokenAddress, sovereignToken2.target, true)
+                .setMultipleSovereignTokenAddress([networkIDRollup], [tokenAddress], [sovereignToken2.target], [true])
         )
             .to.emit(sovereignChainBridgeContract, "SetSovereignTokenAddress")
             .withArgs(networkIDRollup, tokenAddress, sovereignToken2.target, true);
@@ -498,7 +504,7 @@ describe("BridgeL2SovereignChain Contract", () => {
         await expect(
             sovereignChainBridgeContract
                 .connect(rollupManager)
-                .setSovereignTokenAddress(networkIDMainnet, tokenAddress, sovereignToken.target, false)
+                .setMultipleSovereignTokenAddress([networkIDMainnet], [tokenAddress], [sovereignToken.target], [false])
         ).to.be.revertedWithCustomError(sovereignChainBridgeContract, "OnlyBridgeManager");
         // Set rollupManager as bridge manager
         await expect(sovereignChainBridgeContract.connect(bridgeManager).setBridgeManager(rollupManager.address))
@@ -509,18 +515,18 @@ describe("BridgeL2SovereignChain Contract", () => {
         await expect(
             sovereignChainBridgeContract
                 .connect(rollupManager)
-                .setSovereignTokenAddress(networkIDMainnet, ethers.ZeroAddress, sovereignToken.target, false)
+                .setMultipleSovereignTokenAddress([networkIDMainnet], [ethers.ZeroAddress], [sovereignToken.target], [false])
         ).to.be.revertedWithCustomError(sovereignChainBridgeContract, "InvalidZeroAddress");
         // Invalid origin network
         await expect(
             sovereignChainBridgeContract
                 .connect(rollupManager)
-                .setSovereignTokenAddress(networkIDRollup2, tokenAddress, sovereignToken.target, false)
+                .setMultipleSovereignTokenAddress([networkIDRollup2], [tokenAddress], [sovereignToken.target], [false])
         ).to.be.revertedWithCustomError(sovereignChainBridgeContract, "OriginNetworkInvalid");
         await expect(
             sovereignChainBridgeContract
                 .connect(rollupManager)
-                .setSovereignTokenAddress(networkIDRollup, tokenAddress, sovereignToken.target, false)
+                .setMultipleSovereignTokenAddress([networkIDRollup], [tokenAddress], [sovereignToken.target], [false])
         )
             .to.emit(sovereignChainBridgeContract, "SetSovereignTokenAddress")
             .withArgs(networkIDRollup, tokenAddress, sovereignToken.target, false);
@@ -611,11 +617,10 @@ describe("BridgeL2SovereignChain Contract", () => {
                 ethers.Typed.address(bridgeManager),
                 ethers.ZeroAddress,
                 false,
-                deployer.address // claims updater
             )
         ).to.be.revertedWith("Initializable: contract is already initialized");
 
-        await expect(sovereignChainGlobalExitRootContract.initialize(ethers.ZeroAddress)).to.be.revertedWith(
+        await expect(sovereignChainGlobalExitRootContract.initialize(ethers.ZeroAddress, ethers.ZeroAddress)).to.be.revertedWith(
             "Initializable: contract is already initialized"
         );
     });
@@ -1027,11 +1032,6 @@ describe("BridgeL2SovereignChain Contract", () => {
             .withArgs(deployer.address, sovereignChainBridgeContract.target, amount);
 
         expect(false).to.be.equal(await sovereignChainBridgeContract.isClaimed(indexLocal, indexRollup + 1));
-        // try un set the claim, should revert because is not claimed
-        await expect(
-            sovereignChainBridgeContract.unsetClaimedBitmap(indexLocal, indexRollup + 1)
-        ).to.be.revertedWithCustomError(sovereignChainBridgeContract, "ClaimNotSet");
-
         await expect(
             sovereignChainBridgeContract.claimAsset(
                 proofLocal,
@@ -1068,17 +1068,7 @@ describe("BridgeL2SovereignChain Contract", () => {
                 metadata
             )
         ).to.be.revertedWithCustomError(sovereignChainBridgeContract, "AlreadyClaimed");
-        expect(true).to.be.equal(await sovereignChainBridgeContract.isClaimed(indexLocal, indexRollup + 1));
-        // Unclaim the claim
-        // Revert only claim updater allowed
-        await expect(
-            sovereignChainBridgeContract.connect(rollupManager).unsetClaimedBitmap(indexLocal, indexRollup + 1)
-        ).to.be.revertedWithCustomError(sovereignChainBridgeContract, "OnlyClaimsUpdater");
-
-        await sovereignChainBridgeContract.unsetClaimedBitmap(indexLocal, indexRollup + 1);
-
-        expect(false).to.be.equal(await sovereignChainBridgeContract.isClaimed(indexLocal, indexRollup + 1));
-    });
+       });
 
     it("should claim tokens from Rollup to Mainnet", async () => {
         const originNetwork = networkIDRollup;
@@ -1390,24 +1380,28 @@ describe("BridgeL2SovereignChain Contract", () => {
             sovereignChainGlobalExitRootContract.insertGlobalExitRoot(computedGlobalExitRoot2)
         ).to.be.revertedWithCustomError(sovereignChainGlobalExitRootContract, "GlobalExitRootAlreadySet");
 
-        // Set new claims updater
-        await sovereignChainBridgeContract.setClaimsUpdater(deployer.address);
         // Unset claims in bulk
         expect(true).to.be.equal(await sovereignChainBridgeContract.isClaimed(indexLocal, indexRollup + 1));
         expect(true).to.be.equal(await sovereignChainBridgeContract.isClaimed(index2, indexRollup + 1));
 
-        await expect(sovereignChainBridgeContract.unsetMultipleClaimedBitmap(
+        await expect(sovereignChainBridgeContract.connect(bridgeManager).unsetMultipleClaimedBitmap(
             [indexLocal, index2],
             [indexRollup + 1]
         )).to.be.revertedWithCustomError(sovereignChainBridgeContract, "InputArraysLengthMismatch");
 
-        await sovereignChainBridgeContract.unsetMultipleClaimedBitmap(
+        await sovereignChainBridgeContract.connect(bridgeManager).unsetMultipleClaimedBitmap(
             [indexLocal, index2],
             [indexRollup + 1, indexRollup + 1]
         );
 
         expect(false).to.be.equal(await sovereignChainBridgeContract.isClaimed(indexLocal, indexRollup + 1));
         expect(false).to.be.equal(await sovereignChainBridgeContract.isClaimed(index2, indexRollup + 1));
+
+        // Try to unset again
+        await expect(sovereignChainBridgeContract.connect(bridgeManager).unsetMultipleClaimedBitmap(
+            [indexLocal, index2],
+            [indexRollup + 1, indexRollup + 1]
+        )).to.be.revertedWithCustomError(sovereignChainBridgeContract, "ClaimNotSet");
     });
 
     it("should claim tokens from Rollup to Mainnet, failing deploy wrapped", async () => {

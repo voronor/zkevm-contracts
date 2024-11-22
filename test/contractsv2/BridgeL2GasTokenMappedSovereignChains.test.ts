@@ -108,7 +108,6 @@ describe("SovereignChainBridge Gas tokens tests", () => {
             ethers.Typed.address(bridgeManager.address),
             WETHToken.target,
             false,
-            deployer.address // claims updater
         );
         expect(await sovereignChainBridgeContract.WETHToken()).to.be.equal(WETHToken.target);
     });

@@ -22,19 +22,10 @@ contract BridgeL2SovereignChain is
     // Bridge manager address; can set custom mapping for any token
     address public bridgeManager;
 
-    // Claims updater address; can unset claims from claimedBitmap.
-    // In case of initializing a chain with Full execution proofs, this address should be set to zero, otherwise, some malicious sequencer could insert invalid global exit roots, claim, go back and the execution would be correctly proved.
-    address public claimsUpdater;
-
     /**
      * @dev Emitted when a bridge manager is updated
      */
     event SetBridgeManager(address bridgeManager);
-
-    /**
-     * @dev Emitted when a bridge manager is updated
-     */
-    event SetClaimsUpdater(address claimsUpdater);
 
     /**
      * @dev Emitted when a claim is unset
@@ -93,7 +84,6 @@ contract BridgeL2SovereignChain is
      * @param _bridgeManager bridge manager address
      * @param _sovereignWETHAddress sovereign WETH address
      * @param _sovereignWETHAddressIsNotMintable Flag to indicate if the wrapped ETH is not mintable
-     * @param _claimsUpdater Address that can unset claims from claimedBitmap. In case of initializing a chain with Full execution proofs, this address should be set to zero, otherwise, some malicious sequencer could insert invalid global exit roots, claim, go back and the execution would be correctly proved.
      */
     function initialize(
         uint32 _networkID,
@@ -104,14 +94,12 @@ contract BridgeL2SovereignChain is
         bytes memory _gasTokenMetadata,
         address _bridgeManager,
         address _sovereignWETHAddress,
-        bool _sovereignWETHAddressIsNotMintable,
-        address _claimsUpdater
+        bool _sovereignWETHAddressIsNotMintable
     ) public virtual initializer {
         networkID = _networkID;
         globalExitRootManager = _globalExitRootManager;
         polygonRollupManager = _polygonRollupManager;
         bridgeManager = _bridgeManager;
-        claimsUpdater = _claimsUpdater;
 
         // Set gas token
         if (_gasTokenAddress == address(0)) {
@@ -178,13 +166,6 @@ contract BridgeL2SovereignChain is
     modifier onlyBridgeManager() {
         if (bridgeManager != msg.sender) {
             revert OnlyBridgeManager();
-        }
-        _;
-    }
-
-    modifier onlyClaimsUpdater() {
-        if (claimsUpdater != msg.sender) {
-            revert OnlyClaimsUpdater();
         }
         _;
     }
@@ -388,7 +369,7 @@ contract BridgeL2SovereignChain is
     function unsetMultipleClaimedBitmap(
         uint32[] memory leafIndexes,
         uint32[] memory sourceBridgeNetworks
-    ) external onlyClaimsUpdater {
+    ) external onlyBridgeManager {
         if (leafIndexes.length != sourceBridgeNetworks.length) {
             revert InputArraysLengthMismatch();
         }
@@ -405,20 +386,48 @@ contract BridgeL2SovereignChain is
     function setBridgeManager(
         address _bridgeManager
     ) external onlyBridgeManager {
-        if (_bridgeManager == address(0)) revert NotValidBridgeManager();
         bridgeManager = _bridgeManager;
         emit SetBridgeManager(bridgeManager);
     }
 
     /**
-     * @notice Updated bridge manager address
-     * @param _claimsUpdater Bridge manager address
+     * @notice Function to check if an index is claimed or not
+     * @dev function override to improve a bit the performance and bytecode not checking unnecessary conditions for sovereign chains context
+     * @param leafIndex Index
+     * @param sourceBridgeNetwork Origin network
      */
-    function setClaimsUpdater(
-        address _claimsUpdater
-    ) external onlyClaimsUpdater {
-        claimsUpdater = _claimsUpdater;
-        emit SetClaimsUpdater(claimsUpdater);
+    function isClaimed(
+        uint32 leafIndex,
+        uint32 sourceBridgeNetwork
+    ) external view override returns (bool) {
+        uint256 globalIndex = uint256(leafIndex) +
+            uint256(sourceBridgeNetwork) *
+            _MAX_LEAFS_PER_NETWORK;
+
+        (uint256 wordPos, uint256 bitPos) = _bitmapPositions(globalIndex);
+        uint256 mask = (1 << bitPos);
+        return (claimedBitMap[wordPos] & mask) == mask;
+    }
+
+    /**
+     * @notice Function to check that an index is not claimed and set it as claimed
+     * @dev function override to improve a bit the performance and bytecode not checking unnecessary conditions for sovereign chains context
+     * @param leafIndex Index
+     * @param sourceBridgeNetwork Origin network
+     */
+    function _setAndCheckClaimed(
+        uint32 leafIndex,
+        uint32 sourceBridgeNetwork
+    ) internal override {
+        uint256 globalIndex = uint256(leafIndex) +
+            uint256(sourceBridgeNetwork) *
+            _MAX_LEAFS_PER_NETWORK;
+        (uint256 wordPos, uint256 bitPos) = _bitmapPositions(globalIndex);
+        uint256 mask = 1 << bitPos;
+        uint256 flipped = claimedBitMap[wordPos] ^= mask;
+        if (flipped & mask == 0) {
+            revert AlreadyClaimed();
+        }
     }
 
     /**
@@ -480,7 +489,10 @@ contract BridgeL2SovereignChain is
         uint32 leafIndex,
         uint32 sourceBridgeNetwork
     ) private {
-        (uint256 wordPos, uint256 bitPos) = _bitmapPositions(leafIndex, sourceBridgeNetwork);
+        uint256 globalIndex = uint256(leafIndex) +
+            uint256(sourceBridgeNetwork) *
+            _MAX_LEAFS_PER_NETWORK;
+        (uint256 wordPos, uint256 bitPos) = _bitmapPositions(globalIndex);
         uint256 mask = ~(1 << bitPos);
         // Check if the bit is already unset
         if ((claimedBitMap[wordPos] & (1 << bitPos)) == 0) {
@@ -489,6 +501,109 @@ contract BridgeL2SovereignChain is
         // Use bitwise AND with the negated mask to unset the bit
         claimedBitMap[wordPos] &= mask;
         emit UnsetClaim(leafIndex, sourceBridgeNetwork);
+    }
+
+    /**
+     * @notice Function to call token permit method of extended ERC20
+     * @dev We override this function from PolygonZkEVMBridgeV2 to improve a bit the performance and bytecode not checking unnecessary conditions for sovereign chains context
+     + @param token ERC20 token address
+     * @param amount Quantity that is expected to be allowed
+     * @param permitData Raw data of the call `permit` of the token
+     */
+    function _permit(
+        address token,
+        uint256 amount,
+        bytes calldata permitData
+    ) internal override {
+        bytes4 sig = bytes4(permitData[:4]);
+        if (sig == _PERMIT_SIGNATURE) {
+            (
+                address owner,
+                address spender,
+                uint256 value,
+                uint256 deadline,
+                uint8 v,
+                bytes32 r,
+                bytes32 s
+            ) = abi.decode(
+                    permitData[4:],
+                    (
+                        address,
+                        address,
+                        uint256,
+                        uint256,
+                        uint8,
+                        bytes32,
+                        bytes32
+                    )
+                );
+
+            if (value != amount) {
+                revert NotValidAmount();
+            }
+
+            // we call without checking the result, in case it fails and he doesn't have enough balance
+            // the following transferFrom should be fail. This prevents DoS attacks from using a signature
+            // before the smartcontract call
+            /* solhint-disable avoid-low-level-calls */
+            address(token).call(
+                abi.encodeWithSelector(
+                    _PERMIT_SIGNATURE,
+                    owner,
+                    spender,
+                    value,
+                    deadline,
+                    v,
+                    r,
+                    s
+                )
+            );
+        } else {
+            if (sig != _PERMIT_SIGNATURE_DAI) {
+                revert NotValidSignature();
+            }
+
+            (
+                address holder,
+                address spender,
+                uint256 nonce,
+                uint256 expiry,
+                bool allowed,
+                uint8 v,
+                bytes32 r,
+                bytes32 s
+            ) = abi.decode(
+                    permitData[4:],
+                    (
+                        address,
+                        address,
+                        uint256,
+                        uint256,
+                        bool,
+                        uint8,
+                        bytes32,
+                        bytes32
+                    )
+                );
+
+            // we call without checking the result, in case it fails and he doesn't have enough balance
+            // the following transferFrom should be fail. This prevents DoS attacks from using a signature
+            // before the smartcontract call
+            /* solhint-disable avoid-low-level-calls */
+            address(token).call(
+                abi.encodeWithSelector(
+                    _PERMIT_SIGNATURE_DAI,
+                    holder,
+                    spender,
+                    nonce,
+                    expiry,
+                    allowed,
+                    v,
+                    r,
+                    s
+                )
+            );
+        }
     }
 
     // @note This function is not used in the current implementation. We overwrite it to improve deployed bytecode size

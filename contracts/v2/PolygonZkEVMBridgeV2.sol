@@ -30,10 +30,10 @@ contract PolygonZkEVMBridgeV2 is
     }
 
     // bytes4(keccak256(bytes("permit(address,address,uint256,uint256,uint8,bytes32,bytes32)")));
-    bytes4 private constant _PERMIT_SIGNATURE = 0xd505accf;
+    bytes4 internal constant _PERMIT_SIGNATURE = 0xd505accf;
 
     // bytes4(keccak256(bytes("permit(address,address,uint256,uint256,bool,uint8,bytes32,bytes32)")));
-    bytes4 private constant _PERMIT_SIGNATURE_DAI = 0x8fcbaf0c;
+    bytes4 internal constant _PERMIT_SIGNATURE_DAI = 0x8fcbaf0c;
 
     // Mainnet identifier
     uint32 internal constant _MAINNET_NETWORK_ID = 0;
@@ -839,11 +839,22 @@ contract PolygonZkEVMBridgeV2 is
     function isClaimed(
         uint32 leafIndex,
         uint32 sourceBridgeNetwork
-    ) external view returns (bool) {
-        (uint256 wordPos, uint256 bitPos) = _bitmapPositions(
-            leafIndex,
-            sourceBridgeNetwork
-        );
+    ) external view virtual returns (bool) {
+        uint256 globalIndex;
+
+        // For consistency with the previous setted nullifiers
+        if (
+            networkID == _MAINNET_NETWORK_ID &&
+            sourceBridgeNetwork == _ZKEVM_NETWORK_ID
+        ) {
+            globalIndex = uint256(leafIndex);
+        } else {
+            globalIndex =
+                uint256(leafIndex) +
+                uint256(sourceBridgeNetwork) *
+                _MAX_LEAFS_PER_NETWORK;
+        }
+        (uint256 wordPos, uint256 bitPos) = _bitmapPositions(globalIndex);
         uint256 mask = (1 << bitPos);
         return (claimedBitMap[wordPos] & mask) == mask;
     }
@@ -856,11 +867,22 @@ contract PolygonZkEVMBridgeV2 is
     function _setAndCheckClaimed(
         uint32 leafIndex,
         uint32 sourceBridgeNetwork
-    ) private {
-        (uint256 wordPos, uint256 bitPos) = _bitmapPositions(
-            leafIndex,
-            sourceBridgeNetwork
-        );
+    ) internal virtual {
+        uint256 globalIndex;
+
+        // For consistency with the previous setted nullifiers
+        if (
+            networkID == _MAINNET_NETWORK_ID &&
+            sourceBridgeNetwork == _ZKEVM_NETWORK_ID
+        ) {
+            globalIndex = uint256(leafIndex);
+        } else {
+            globalIndex =
+                uint256(leafIndex) +
+                uint256(sourceBridgeNetwork) *
+                _MAX_LEAFS_PER_NETWORK;
+        }
+        (uint256 wordPos, uint256 bitPos) = _bitmapPositions(globalIndex);
         uint256 mask = 1 << bitPos;
         uint256 flipped = claimedBitMap[wordPos] ^= mask;
         if (flipped & mask == 0) {
@@ -916,29 +938,14 @@ contract PolygonZkEVMBridgeV2 is
     }
 
     /**
-     * @notice Computes globalIndex and decodes it into a wordPos and bitPos
-     * @param _leafIndex Index
-     * @param _sourceBridgeNetwork Origin network
+     * @notice Function decode an index into a wordPos and bitPos
+     * @param index Index
      */
     function _bitmapPositions(
-        uint32 _leafIndex,
-        uint32 _sourceBridgeNetwork
-    ) internal view returns (uint256 wordPos, uint256 bitPos) {
-        uint256 globalIndex;
-        // For consistency with the previous setted nullifiers
-        if (
-            networkID == _MAINNET_NETWORK_ID &&
-            _sourceBridgeNetwork == _ZKEVM_NETWORK_ID
-        ) {
-            globalIndex = uint256(_leafIndex);
-        } else {
-            globalIndex =
-                uint256(_leafIndex) +
-                uint256(_sourceBridgeNetwork) *
-                _MAX_LEAFS_PER_NETWORK;
-        }
-        wordPos = uint248(globalIndex >> 8);
-        bitPos = uint8(globalIndex);
+        uint256 index
+    ) internal pure returns (uint256 wordPos, uint256 bitPos) {
+        wordPos = uint248(index >> 8);
+        bitPos = uint8(index);
     }
 
     /**
@@ -951,7 +958,7 @@ contract PolygonZkEVMBridgeV2 is
         address token,
         uint256 amount,
         bytes calldata permitData
-    ) internal {
+    ) internal virtual {
         bytes4 sig = bytes4(permitData[:4]);
         if (sig == _PERMIT_SIGNATURE) {
             (

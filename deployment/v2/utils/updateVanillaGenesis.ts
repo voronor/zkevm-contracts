@@ -63,7 +63,7 @@ async function updateVanillaGenesis(genesis, chainID, initializeParams) {
     let txObject = ethers.Transaction.from(injectedTx);
     const txDeployBridge = processorUtils.rawTxToCustomRawTx(txObject.serialized);
     // Check ecrecover
-    expect(txObject.from).to.equal(ethers.recoverAddress(txObject.unsignedHash, txObject.signature));
+    expect(txObject.from).to.equal(ethers.recoverAddress(txObject.unsignedHash, txObject.signature as any));
     batch.addRawTx(txDeployBridge);
     const sovereignBridgeAddress = getContractAddress({from: txObject.from, nonce: injectedTx.nonce});
 
@@ -82,7 +82,7 @@ async function updateVanillaGenesis(genesis, chainID, initializeParams) {
     txObject = ethers.Transaction.from(injectedTx);
     const txDeployGER = processorUtils.rawTxToCustomRawTx(txObject.serialized);
     // Check ecrecover
-    expect(txObject.from).to.equal(ethers.recoverAddress(txObject.unsignedHash, txObject.signature));
+    expect(txObject.from).to.equal(ethers.recoverAddress(txObject.unsignedHash, txObject.signature as any));
     batch.addRawTx(txDeployGER);
     const GERAddress = getContractAddress({from: txObject.from, nonce: injectedTx.nonce});
 
@@ -131,6 +131,7 @@ async function updateVanillaGenesis(genesis, chainID, initializeParams) {
         sovereignWETHAddress,
         sovereignWETHAddressIsNotMintable,
         globalExitRootUpdater,
+        globalExitRootRemover,
     } = initializeParams;
     const initializeData = sovereignBridgeFactory.interface.encodeFunctionData(
         "initialize(uint32,address,uint32,address,address,bytes,address,address,bool)",
@@ -151,11 +152,14 @@ async function updateVanillaGenesis(genesis, chainID, initializeParams) {
     txObject = ethers.Transaction.from(injectedTx);
     const txInitializeBridge = processorUtils.rawTxToCustomRawTx(txObject.serialized);
     // Check ecrecover
-    expect(txObject.from).to.equal(ethers.recoverAddress(txObject.unsignedHash, txObject.signature));
+    expect(txObject.from).to.equal(ethers.recoverAddress(txObject.unsignedHash, txObject.signature as any));
     batch2.addRawTx(txInitializeBridge);
 
     // Initialize GER Manager
-    const initializeGERData = gerFactory.interface.encodeFunctionData("initialize", [globalExitRootUpdater]);
+    const initializeGERData = gerFactory.interface.encodeFunctionData("initialize", [
+        globalExitRootUpdater,
+        globalExitRootRemover,
+    ]);
     // Update injectedTx to initialize GER
     injectedTx.to = gerProxy.address;
     injectedTx.data = initializeGERData;
@@ -163,7 +167,7 @@ async function updateVanillaGenesis(genesis, chainID, initializeParams) {
     const txObject2 = ethers.Transaction.from(injectedTx);
     const txInitializeGER = processorUtils.rawTxToCustomRawTx(txObject2.serialized);
     // Check ecrecover
-    expect(txObject.from).to.equal(ethers.recoverAddress(txObject.unsignedHash, txObject.signature));
+    expect(txObject.from).to.equal(ethers.recoverAddress(txObject.unsignedHash, txObject.signature as any));
     batch2.addRawTx(txInitializeGER);
 
     // Execute batch
@@ -352,6 +356,12 @@ async function updateVanillaGenesis(genesis, chainID, initializeParams) {
     expect(gerProxy.storage["0x0000000000000000000000000000000000000000000000000000000000000034"]).to.include(
         globalExitRootUpdater.toLowerCase().slice(2)
     );
+    if (ethers.isAddress(globalExitRootRemover) && globalExitRootRemover !== ethers.ZeroAddress) {
+        // Storage value of global exit root updater
+        expect(gerProxy.storage["0x0000000000000000000000000000000000000000000000000000000000000035"]).to.include(
+            globalExitRootRemover.toLowerCase().slice(2)
+        );
+    }
 
     // Create a new zkEVM to generate a genesis an empty system address storage
     const zkEVMDB3 = await ZkEVMDB.newZkEVM(

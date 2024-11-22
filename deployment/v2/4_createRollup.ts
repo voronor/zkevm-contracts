@@ -81,12 +81,14 @@ async function main() {
         if (consensusContract !== "PolygonPessimisticConsensus") {
             throw new Error(`Vanilla client only supports PolygonPessimisticConsensus`);
         }
+
         // Check sovereign params
         const mandatorySovereignParams = [
             "bridgeManager",
             "sovereignWETHAddress",
             "sovereignWETHAddressIsNotMintable",
             "globalExitRootUpdater",
+            "globalExitRootRemover",
         ];
         for (const parameterName of mandatorySovereignParams) {
             if (typeof sovereignParams[parameterName] === undefined || sovereignParams[parameterName] === "") {
@@ -386,6 +388,7 @@ async function main() {
             sovereignWETHAddress: sovereignParams.sovereignWETHAddress,
             sovereignWETHAddressIsNotMintable: sovereignParams.sovereignWETHAddressIsNotMintable,
             globalExitRootUpdater: sovereignParams.globalExitRootUpdater,
+            globalExitRootRemover: sovereignParams.globalExitRootRemover,
         };
         genesis = await updateVanillaGenesis(genesis, chainID, initializeParams);
         // Add weth address to deployment output if gas token address is provided and sovereignWETHAddress is not provided
