@@ -1,5 +1,6 @@
 # Add Rollup Type
-Script to call `createNewRollup` function
+Script to call `createNewRollup` function. 
+- This script needs of a genesis as input only if we are trying to deploy a sovereign chain. The genesis will only be updated in case of trying to deploy a sovereign chain. In this case, a new `genesis_sovereign.json` will be created.
 
 ## Install
 ```
@@ -36,7 +37,7 @@ npm i
 ```
 cp ./tools/createNewRollup/create_new_rollup.json.example ./tools/createNewRollup/create_new_rollup.json
 ```
-
+- Copy genesis file (only for sovereign chains)
 ```
 cp ./tools/addRollupType/genesis.json.example ./tools/addRollupType/genesis.json
 ```

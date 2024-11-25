@@ -7,13 +7,10 @@ import fs = require("fs");
 import * as dotenv from "dotenv";
 dotenv.config({path: path.resolve(__dirname, "../../.env")});
 import {ethers, upgrades} from "hardhat";
-
-const pathGenesis = path.join(__dirname, "./genesis.json");
-const pathGenesisSovereign = path.join(__dirname, "./genesis_sovereign.json");
 import {processorUtils, Constants} from "@0xpolygonhermez/zkevm-commonjs";
 
 const createRollupParameters = require("./create_new_rollup.json");
-let genesis = require(pathGenesis);
+
 import updateVanillaGenesis from "../../deployment/v2/utils/updateVanillaGenesis";
 const pathOutputJson = path.join(__dirname, "./create_new_rollup_output.json");
 
@@ -60,6 +57,7 @@ async function main() {
         sovereignParams,
     } = createRollupParameters;
 
+    // Check supported consensus is correct
     const supportedConsensus = ["PolygonZkEVMEtrog", "PolygonValidiumEtrog", "PolygonPessimisticConsensus"];
 
     if (!supportedConsensus.includes(consensusContractName)) {
@@ -148,6 +146,7 @@ async function main() {
         globalExitRootManagerAddress
     ) as PolygonRollupManager;
 
+    // Check if the deployer has right to deploy new rollups from rollupManager contract
     const DEFAULT_ADMIN_ROLE = ethers.ZeroHash;
     if ((await rollupManagerContract.hasRole(DEFAULT_ADMIN_ROLE, deployer.address)) == false) {
         throw new Error(
@@ -176,6 +175,7 @@ async function main() {
     if ((await rollupManagerContract.hasRole(CREATE_ROLLUP_ROLE, deployer.address)) == false)
         await rollupManagerContract.grantRole(CREATE_ROLLUP_ROLE, deployer.address);
 
+    // Get rollup address deterministically
     const nonce = await currentProvider.getTransactionCount(rollupManagerContract.target);
     const createdRollupAddress = ethers.getCreateAddress({
         from: rollupManagerContract.target as string,
@@ -204,6 +204,7 @@ async function main() {
     // Update rollupId
     rollupID = await rollupManagerContract.chainIDToRollupID(chainID);
 
+    // If is a validium, data committee must be set up
     const polygonConsensusFactory = (await ethers.getContractFactory(consensusContractName, deployer)) as any;
     const dataAvailabilityProtocol = createRollupParameters.dataAvailabilityProtocol || "PolygonDataCommittee";
     if (consensusContractName.includes("PolygonValidiumEtrog") && dataAvailabilityProtocol === "PolygonDataCommittee") {
@@ -214,17 +215,17 @@ async function main() {
         });
         await polygonDataCommittee?.waitForDeployment();
 
-        // Load data commitee
+        // Load data committee
         const PolygonValidiumContract = (await polygonConsensusFactory.attach(
             createdRollupAddress
         )) as PolygonValidiumEtrog;
-        // add data commitee to the consensus contract
+        // add data committee to the consensus contract
         if ((await PolygonValidiumContract.admin()) == deployer.address) {
             await (
                 await PolygonValidiumContract.setDataAvailabilityProtocol(polygonDataCommittee?.target as any)
             ).wait();
 
-            // // Setup data commitee to 0
+            // // Setup data committee to 0
             // await (await polygonDataCommittee?.setupCommittee(0, [], "0x")).wait();
         } else {
             await (await polygonDataCommittee?.transferOwnership(rollupAdminAddress)).wait();
@@ -286,6 +287,8 @@ async function main() {
     let batchData = "";
     // If is vanilla client, replace genesis by sovereign contracts, else, inject initialization batch
     if (isVanillaClient) {
+        const pathGenesis = path.join(__dirname, "./genesis.json");
+        let genesis = require(pathGenesis);
         const initializeParams = {
             rollupID: rollupID,
             gasTokenAddress,
@@ -311,6 +314,7 @@ async function main() {
             });
             outputJson.WETHAddress = wethObject.address;
         }
+        fs.writeFileSync(pathGenesis, JSON.stringify(genesis, null, 1));
     } else {
         if (consensusContractName === "PolygonPessimisticConsensus") {
             // Add the first batch of the created rollup
@@ -382,16 +386,11 @@ async function main() {
         }
     }
     outputJson.firstBatchData = batchData;
-    outputJson.genesis = genesis.root;
+    outputJson.genesis = rollupType.genesis;
     outputJson.createRollupBlockNumber = blockDeploymentRollup.number;
     outputJson.rollupAddress = createdRollupAddress;
     outputJson.consensusContract = consensusContractName;
     outputJson.rollupID = Number(rollupID);
-    // Rewrite updated genesis in case of vanilla client
-    if (isVanillaClient) {
-        fs.writeFileSync(pathGenesisSovereign, JSON.stringify(genesis, null, 1));
-    }
-    fs.writeFileSync(pathOutputJson, JSON.stringify(outputJson, null, 1));
 }
 
 main().catch((e) => {
