@@ -307,12 +307,7 @@ describe("Polygon Rollup Manager with Polygon Pessimistic Consensus", () => {
         expect(inputPessimisticBytes).to.be.equal(expectedInputPessimisticBytes);
         // Mock selected GER
         await polygonZkEVMGlobalExitRoot.injectGER(l1InfoRoot, l1InfoTreeLeafCount);
-        // Mock last LER and last Pessimistic root
-        await rollupManagerContract.setRollupData(
-            pessimisticRollupID,
-            inputProof["pp-inputs"]["prev-local-exit-root"],
-            inputProof["pp-inputs"]["prev-pessimistic-root"]
-        );
+
         // verify pessimistic
         await expect(
             rollupManagerContract
