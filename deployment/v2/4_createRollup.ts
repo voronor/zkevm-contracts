@@ -377,7 +377,9 @@ async function main() {
     }
 
     let batchData = "";
-    // If is vanilla client, replace genesis by sovereign contracts, else, inject initialization batch
+    /**
+    If the system is running a "vanilla client" (i.e., a basic, unmodified Ethereum client or rollup setup), the genesis block should include the deployment of the sovereign contracts, and these contracts should already be initialized with their required initial state and configurations. This means that the genesis block will contain the initial state for these contracts, allowing the system to start running without needing any additional initialization steps. However, for other rollups, additional configuration is needed. In this case, instead of having everything pre-initialized in the genesis block, we must inject an "initialization batch" into the genesis file. This batch will contain specific instructions for initializing the contracts at the time of rollup deployment. The injected initialization batch allows the system to be configured dynamically during deployment.
+     */
     if (isVanillaClient) {
         const initializeParams = {
             rollupID: rollupID,
