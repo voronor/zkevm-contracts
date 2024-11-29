@@ -1,4 +1,5 @@
 {
+    "type":"EOA",
     "trustedSequencerURL": "http://zkevm-json-rpc:8123",
     "networkName": "zkevm",
     "trustedSequencer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",

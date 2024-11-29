@@ -21,7 +21,7 @@ async function main() {
 
     /*
      * Check deploy parameters
-     * Check that every necessary parameter is fullfilled
+     * Check that every necessary parameter is fulfilled
      */
     const mandatoryDeploymentParameters = [
         "description",
@@ -86,11 +86,11 @@ async function main() {
             } else {
                 console.log("Multiplier gas used: ", addRollupParameters.multiplierGas);
                 async function overrideFeeData() {
-                    const feedata = await ethers.provider.getFeeData();
+                    const feeData = await ethers.provider.getFeeData();
                     return new ethers.FeeData(
                         null,
-                        ((feedata.maxFeePerGas as bigint) * BigInt(addRollupParameters.multiplierGas)) / 1000n,
-                        ((feedata.maxPriorityFeePerGas as bigint) * BigInt(addRollupParameters.multiplierGas)) / 1000n
+                        ((feeData.maxFeePerGas as bigint) * BigInt(addRollupParameters.multiplierGas)) / 1000n,
+                        ((feeData.maxPriorityFeePerGas as bigint) * BigInt(addRollupParameters.multiplierGas)) / 1000n
                     );
                 }
                 currentProvider.getFeeData = overrideFeeData;
@@ -114,8 +114,8 @@ async function main() {
     console.log("Using with: ", deployer.address);
 
     // Load Rollup manager
-    const PolgonRollupManagerFactory = await ethers.getContractFactory("PolygonRollupManager", deployer);
-    const rollupManagerContract = PolgonRollupManagerFactory.attach(
+    const PolygonRollupManagerFactory = await ethers.getContractFactory("PolygonRollupManager", deployer);
+    const rollupManagerContract = PolygonRollupManagerFactory.attach(
         polygonRollupManagerAddress
     ) as PolygonRollupManager;
 
@@ -133,7 +133,7 @@ async function main() {
 
         // get bridge address in genesis file
         let genesisBridgeAddress = ethers.ZeroAddress;
-        for (let i = 0; i < genesis.genesis.lenght; i++) {
+        for (let i = 0; i < genesis.genesis.length; i++) {
             if (genesis.genesis[i].contractName === "PolygonZkEVMBridge proxy") {
                 genesisBridgeAddress = genesis.genesis[i].address;
                 break;
@@ -148,33 +148,33 @@ async function main() {
     }
 
     // Create consensus implementation if needed
-    const PolygonconsensusFactory = (await ethers.getContractFactory(consensusContract, deployer)) as any;
-    let PolygonconsensusContract;
-    let PolygonconsensusContractAddress;
+    const PolygonConsensusFactory = (await ethers.getContractFactory(consensusContract, deployer)) as any;
+    let PolygonConsensusContract;
+    let PolygonConsensusContractAddress;
 
     if (
         typeof addRollupParameters.consensusContractAddress !== "undefined" &&
         ethers.isAddress(addRollupParameters.consensusContractAddress)
     ) {
-        PolygonconsensusContractAddress = addRollupParameters.consensusContractAddress;
+        PolygonConsensusContractAddress = addRollupParameters.consensusContractAddress;
     } else {
-        PolygonconsensusContract = await PolygonconsensusFactory.deploy(
+        PolygonConsensusContract = await PolygonConsensusFactory.deploy(
             polygonZkEVMGlobalExitRootAddress,
             polTokenAddress,
             polygonZkEVMBridgeAddress,
             polygonRollupManagerAddress
         );
-        await PolygonconsensusContract.waitForDeployment();
+        await PolygonConsensusContract.waitForDeployment();
 
-        PolygonconsensusContractAddress = PolygonconsensusContract.target;
+        PolygonConsensusContractAddress = PolygonConsensusContract.target;
 
         console.log("#######################\n");
         console.log(`new consensus name: ${consensusContract}`);
-        console.log(`new PolygonconsensusContract impl: ${PolygonconsensusContractAddress}`);
+        console.log(`new PolygonConsensusContract impl: ${PolygonConsensusContractAddress}`);
 
         console.log("you can verify the new impl address with:");
         console.log(
-            `npx hardhat verify --constructor-args upgrade/arguments.js ${PolygonconsensusContractAddress} --network ${process.env.HARDHAT_NETWORK}\n`
+            `npx hardhat verify --constructor-args upgrade/arguments.js ${PolygonConsensusContractAddress} --network ${process.env.HARDHAT_NETWORK}\n`
         );
         console.log("Copy the following constructor arguments on: upgrade/arguments.js \n", [
             polygonZkEVMGlobalExitRootAddress,
@@ -205,8 +205,8 @@ async function main() {
     const operation = genOperation(
         polygonRollupManagerAddress,
         0, // value
-        PolgonRollupManagerFactory.interface.encodeFunctionData("addNewRollupType", [
-            PolygonconsensusContractAddress,
+        PolygonRollupManagerFactory.interface.encodeFunctionData("addNewRollupType", [
+            PolygonConsensusContractAddress,
             verifierAddress,
             forkID,
             rollupVerifierType,
@@ -246,7 +246,7 @@ async function main() {
     outputJson.executeData = executeData;
     outputJson.id = operation.id;
 
-    // Decode the scheduleData for better readibility
+    // Decode the scheduleData for better readability
     const timelockTx = timelockContractFactory.interface.parseTransaction({data: scheduleData});
     const paramsArray = timelockTx?.fragment.inputs;
     const objectDecoded = {};
@@ -257,7 +257,7 @@ async function main() {
         objectDecoded[currentParam.name] = timelockTx?.args[i];
 
         if (currentParam.name == "data") {
-            const decodedRollupManagerData = PolgonRollupManagerFactory.interface.parseTransaction({
+            const decodedRollupManagerData = PolygonRollupManagerFactory.interface.parseTransaction({
                 data: timelockTx?.args[i],
             });
             const objectDecodedData = {};
@@ -273,7 +273,7 @@ async function main() {
 
     outputJson.decodedScheduleData = objectDecoded;
 
-    // Decode the schedule data to better readibiltiy:
+    // Decode the schedule data to better readability:
 
     fs.writeFileSync(pathOutputJson, JSON.stringify(outputJson, null, 1));
 }

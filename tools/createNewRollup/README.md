@@ -2,7 +2,7 @@
 
 Script to call `createNewRollup` function.
 
--   This script needs of a genesis as input only if we are trying to deploy a sovereign chain. The genesis will only be updated in case of trying to deploy a sovereign chain. In this case, a new `genesis_sovereign.json` will be created.
+-   This script needs of a genesis as input only if we are trying to deploy a sovereign chain. The genesis will only be updated in case of trying to deploy a sovereign chain. In this case, this new sovereign genesis will be appended at the output file
 
 ## Install
 
@@ -13,6 +13,10 @@ npm i
 ## Setup
 
 -   Config file
+    - `type`: Specify the type of rollup creation, only available:
+        - EOA: If creating the rollup from a wallet, the script will execute the creation of the rollup on the specified network
+        - Multisig: If creating the rollup from a multisig, the script will output the calldata of the transaction to execute for creating the rollup
+        - Timelock: If creating the rollup through a timelock, the script will output the execute and schedule data to send to the timelock contract
     -   `trustedSequencerURL`: Sequencer URL of the new created rollup
     -   `networkName`: Network name of the new created rollup
     -   `trustedSequencer`: Sequencer address of the new created rollup
@@ -24,8 +28,8 @@ npm i
     -   `maxFeePerGas(optional)`: string, Set `maxFeePerGas`, must define as well `maxPriorityFeePerGas` to use it
     -   `maxPriorityFeePerGas(optional)`: string, Set `maxPriorityFeePerGas`, must define as well `maxFeePerGas` to use it
     -   `multiplierGas(optional)`: number, Gas multiplier with 3 decimals. If `maxFeePerGas` and `maxPriorityFeePerGas` are set, this will not take effect
-    - `timelockDelay`: timelock delay, if is zero, no timelock is executed, direct deploy
-    - `timelockSalt(optional)`: timelock salt
+    - `timelockDelay(optional)`: timelock delay, only required on timelock type
+    - `timelockSalt(optional)`: timelock salt, only required on timelock type
     -   `rollupManagerAddress`: Address of deployed rollupManager contract
     -   `isVanillaClient`: Flag for vanilla/sovereign clients handling
     -   `sovereignParams`:
@@ -59,3 +63,5 @@ cp ./tools/createNewRollup/genesis.json.example ./tools/createNewRollup/genesis.
 ```
 npx hardhat run ./tools/createNewRollup/createNewRollup.ts --network sepolia
 ```
+
+Recommendation: run the tool from the interactive rollup manager cli -> https://github.com/0xPolygonHermez/rollup-manager-cli

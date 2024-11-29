@@ -9,7 +9,7 @@ import {ethers, upgrades} from "hardhat";
 import {processorUtils, Constants} from "@0xpolygonhermez/zkevm-commonjs";
 import {VerifierType, ConsensusContracts} from "../../src/pessimistic-utils";
 const createRollupParameters = require("./create_new_rollup.json");
-
+import {genOperation, createNewRollupTypes, convertBigIntsToNumbers} from "../utils";
 import updateVanillaGenesis from "../../deployment/v2/utils/updateVanillaGenesis";
 
 import {
@@ -21,8 +21,14 @@ import {
 } from "../../typechain-types";
 
 async function main() {
-    console.log("Starting script to create new rollup...");
+    console.log(`Starting script to create new rollup from ${createRollupParameters.type}...`);
     const outputJson = {} as any;
+    const destPath = createRollupParameters.outputPath
+        ? createRollupParameters.outputPath
+        : `./outputs/create_new_rollup_output_${createRollupParameters.type}_${Math.floor(
+              new Date().getTime() / 1000
+          )}.json`;
+
     /*
      * Check deploy parameters
      * Check that every necessary parameter is fulfilled
@@ -37,8 +43,19 @@ async function main() {
         "rollupManagerAddress",
         "rollupTypeId",
         "gasTokenAddress",
+        "type",
     ];
-
+    // check create rollup type
+    switch (createRollupParameters.type) {
+        case createNewRollupTypes.EOA:
+        case createNewRollupTypes.MULTISIG:
+            break;
+        case createNewRollupTypes.TIMELOCK:
+            mandatoryDeploymentParameters.push("timelockDelay");
+            break;
+        default:
+            throw new Error(`Invalid type ${createRollupParameters.type}`);
+    }
     for (const parameterName of mandatoryDeploymentParameters) {
         if (createRollupParameters[parameterName] === undefined || createRollupParameters[parameterName] === "") {
             throw new Error(`Missing parameter: ${parameterName}`);
@@ -86,6 +103,16 @@ async function main() {
             if (typeof sovereignParams[parameterName] === undefined || sovereignParams[parameterName] === "") {
                 throw new Error(`Missing sovereign parameter: ${parameterName}`);
             }
+        }
+        // Vanilla checks like in bridge contract
+        if(ethers.isAddress(createRollupParameters.gasTokenAddress) &&
+        createRollupParameters.gasTokenAddress !== ethers.ZeroAddress &&
+        sovereignParams.sovereignWETHAddress === ethers.ZeroAddress && sovereignParams.sovereignWETHAddressIsNotMintable === true) {
+            throw new Error("InvalidSovereignWETHAddressParams: if gasTokenAddress is not 0x0, and sovereignWETHAddress is 0x0, sovereignWETHAddressIsNotMintable must be false");
+        }
+
+        if(createRollupParameters.gasTokenAddress === ethers.ZeroAddress && (sovereignParams.sovereignWETHAddress !== ethers.ZeroAddress || sovereignParams.sovereignWETHAddressIsNotMintable === true)) {
+            throw new Error("InvalidSovereignWETHAddressParams: If gasTokenAddress is 0x0, sovereignWETHAddress must be 0x0 and sovereignWETHAddressIsNotMintable must be false");
         }
     }
 
@@ -210,28 +237,140 @@ async function main() {
         from: rollupManagerContract.target as string,
         nonce: nonce,
     });
-    console.log("Deploying rollup....");
-    // Create new rollup
-    const txDeployRollup = await rollupManagerContract.createNewRollup(
-        createRollupParameters.rollupTypeId,
-        chainID,
-        rollupAdminAddress,
-        trustedSequencer,
-        createRollupParameters.gasTokenAddress,
-        trustedSequencerURL,
-        networkName
-    );
+    let globalExitRoot = "";
+    let batchData = {};
+    // Populate output json
+    outputJson.consensusContractName = consensusContractName;
+    outputJson.rollupAddress = createdRollupAddress;
+    outputJson.genesis = rollupType.genesis;
     outputJson.gasTokenAddress = createRollupParameters.gasTokenAddress;
+    if (createRollupParameters.type === createNewRollupTypes.TIMELOCK) {
+        console.log("Creating timelock txs for rollup creation...");
+        const salt = createRollupParameters.timelockSalt || ethers.ZeroHash;
+        const predecessor = ethers.ZeroHash;
+        const timelockContractFactory = await ethers.getContractFactory("PolygonZkEVMTimelock", deployer);
+        const operation = genOperation(
+            createRollupParameters.rollupManagerAddress,
+            0, // value
+            PolygonRollupManagerFactory.interface.encodeFunctionData("createNewRollup", [
+                createRollupParameters.rollupTypeId,
+                chainID,
+                rollupAdminAddress,
+                trustedSequencer,
+                createRollupParameters.gasTokenAddress,
+                trustedSequencerURL,
+                networkName,
+            ]),
+            predecessor, // predecessor
+            salt // salt
+        );
+        // Schedule operation
+        const scheduleData = timelockContractFactory.interface.encodeFunctionData("schedule", [
+            operation.target,
+            operation.value,
+            operation.data,
+            operation.predecessor,
+            operation.salt,
+            createRollupParameters.timelockDelay,
+        ]);
+        // Execute operation
+        const executeData = timelockContractFactory.interface.encodeFunctionData("execute", [
+            operation.target,
+            operation.value,
+            operation.data,
+            operation.predecessor,
+            operation.salt,
+        ]);
+        console.log({scheduleData});
+        console.log({executeData});
+        outputJson.scheduleData = scheduleData;
+        outputJson.executeData = executeData;
+        // Decode the scheduleData for better readability
+        const timelockTx = timelockContractFactory.interface.parseTransaction({data: scheduleData});
+        const paramsArray = timelockTx?.fragment.inputs;
+        const objectDecoded = {};
+        for (let i = 0; i < paramsArray?.length; i++) {
+            const currentParam = paramsArray[i];
 
-    const receipt = (await txDeployRollup.wait()) as any;
-    const blockDeploymentRollup = await receipt?.getBlock();
-    const timestampReceipt = blockDeploymentRollup.timestamp;
+            objectDecoded[currentParam.name] = timelockTx?.args[i];
 
-    console.log("#######################\n");
-    console.log(
-        `Created new ${consensusContractName} Rollup: ${createdRollupAddress} with rollupTypeId: ${createRollupParameters.rollupTypeId}`
-    );
+            if (currentParam.name == "data") {
+                const decodedRollupManagerData = PolygonRollupManagerFactory.interface.parseTransaction({
+                    data: timelockTx?.args[i],
+                });
+                const objectDecodedData = {};
+                const paramsArrayData = decodedRollupManagerData?.fragment.inputs;
 
+                for (let j = 0; j < paramsArrayData?.length; j++) {
+                    const currentParam = paramsArrayData[j];
+                    objectDecodedData[currentParam.name] = decodedRollupManagerData?.args[j];
+                }
+                objectDecoded["decodedData"] = objectDecodedData;
+            }
+        }
+
+        outputJson.decodedScheduleData = convertBigIntsToNumbers(objectDecoded);
+        fs.writeFileSync(path.join(__dirname, destPath), JSON.stringify(outputJson, null, 1));
+        console.log("Finished script, output saved at: ", destPath);
+        process.exit(0);
+    } else if (createRollupParameters.type === createNewRollupTypes.MULTISIG) {
+        console.log("Creating calldata for rollup creation from multisig...");
+        const txDeployRollupCalldata = PolygonRollupManagerFactory.interface.encodeFunctionData("createNewRollup", [
+            createRollupParameters.rollupTypeId,
+            chainID,
+            rollupAdminAddress,
+            trustedSequencer,
+            createRollupParameters.gasTokenAddress,
+            trustedSequencerURL,
+            networkName,
+        ]);
+        outputJson.txDeployRollupCalldata = txDeployRollupCalldata;
+        fs.writeFileSync(path.join(__dirname, destPath), JSON.stringify(outputJson, null, 1));
+        console.log("Finished script, output saved at: ", destPath);
+        process.exit(0);
+    } else {
+        console.log("Deploying rollup....");
+        // Create new rollup
+        const txDeployRollup = await rollupManagerContract.createNewRollup(
+            createRollupParameters.rollupTypeId,
+            chainID,
+            rollupAdminAddress,
+            trustedSequencer,
+            createRollupParameters.gasTokenAddress,
+            trustedSequencerURL,
+            networkName
+        );
+
+        const receipt = (await txDeployRollup.wait()) as any;
+        const blockDeploymentRollup = await receipt?.getBlock();
+
+        batchData = {
+            timestamp: blockDeploymentRollup.timestamp,
+            l1BlockNumber: blockDeploymentRollup.number,
+            l1BlockHash: blockDeploymentRollup.hash,
+            l1ParentHash: blockDeploymentRollup.parentHash,
+        };
+        outputJson.createRollupBlockNumber = blockDeploymentRollup.number;
+        console.log("#######################\n");
+        console.log(
+            `Created new ${consensusContractName} Rollup: ${createdRollupAddress} with rollupTypeId: ${createRollupParameters.rollupTypeId}`
+        );
+
+        // Search added global exit root on the logs
+        for (const log of receipt?.logs) {
+            if (log.address == createdRollupAddress) {
+                const parsedLog = polygonConsensusFactory.interface.parseLog(log);
+                if (parsedLog != null && parsedLog.name == "InitialSequenceBatches") {
+                    globalExitRoot = parsedLog.args.lastGlobalExitRoot;
+                }
+            }
+        }
+        // Assert admin address
+        expect(await upgrades.erc1967.getAdminAddress(createdRollupAddress)).to.be.equal(rollupManagerContract.target);
+        expect(await upgrades.erc1967.getImplementationAddress(createdRollupAddress)).to.be.equal(
+            consensusContractAddress
+        );
+    }
     // Update rollupId
     rollupID = await rollupManagerContract.chainIDToRollupID(chainID);
 
@@ -261,21 +400,6 @@ async function main() {
             console.log(`Transferred ownership of PolygonDataCommittee to ${rollupAdminAddress}`);
         }
         outputJson.polygonDataCommitteeAddress = polygonDataCommittee?.target;
-    }
-
-    // Assert admin address
-    expect(await upgrades.erc1967.getAdminAddress(createdRollupAddress)).to.be.equal(rollupManagerContract.target);
-    expect(await upgrades.erc1967.getImplementationAddress(createdRollupAddress)).to.be.equal(consensusContractAddress);
-
-    // Search added global exit root on the logs
-    let globalExitRoot;
-    for (const log of receipt?.logs) {
-        if (log.address == createdRollupAddress) {
-            const parsedLog = polygonConsensusFactory.interface.parseLog(log);
-            if (parsedLog != null && parsedLog.name == "InitialSequenceBatches") {
-                globalExitRoot = parsedLog.args.lastGlobalExitRoot;
-            }
-        }
     }
 
     let gasTokenAddress, gasTokenNetwork, gasTokenMetadata;
@@ -313,7 +437,6 @@ async function main() {
         gasTokenMetadata = "0x";
     }
 
-    let batchData = "";
     /**
     If the system is running a "vanilla client" (i.e., a basic, unmodified Ethereum client or rollup setup), the genesis block should include the deployment of the sovereign contracts, and these contracts should already be initialized with their required initial state and configurations. This means that the genesis block will contain the initial state for these contracts, allowing the system to start running without needing any additional initialization steps. However, for other rollups, additional configuration is needed. In this case, instead of having everything pre-initialized in the genesis block, we must inject an "initialization batch" into the genesis file. This batch will contain specific instructions for initializing the contracts at the time of rollup deployment. The injected initialization batch allows the system to be configured dynamically during deployment.
     */
@@ -348,7 +471,7 @@ async function main() {
             });
             outputJson.WETHAddress = wethObject.address;
         }
-        outputJson.genesis_sovereign = JSON.stringify(genesis, null, 1);
+        outputJson.genesis_sovereign = genesis;
     } else {
         if (consensusContractName === "PolygonPessimisticConsensus") {
             console.log("Pessimistic rollup detected, injecting initialization batch...");
@@ -395,20 +518,16 @@ async function main() {
             const txObject = ethers.Transaction.from(injectedTx);
 
             const customData = processorUtils.rawTxToCustomRawTx(txObject.serialized);
-            batchData = {
+            batchData = Object.assign(batchData, {
                 batchL2Data: customData,
                 globalExitRoot: lastGER,
-                timestamp: blockDeploymentRollup.timestamp,
                 sequencer: trustedSequencer,
-                l1BlockNumber: blockDeploymentRollup.number,
-                l1BlockHash: blockDeploymentRollup.hash,
-                l1ParentHash: blockDeploymentRollup.parentHash,
-            } as any;
+            });
         } else {
             console.log("Setting initialization batch for the rollup...");
             // Add the first batch of the created rollup
             const newRollupContract = (await polygonConsensusFactory.attach(createdRollupAddress)) as PolygonZkEVMEtrog;
-            batchData = {
+            batchData = Object.assign(batchData, {
                 batchL2Data: await newRollupContract.generateInitializeTransaction(
                     Number(rollupID),
                     gasTokenAddress,
@@ -416,20 +535,15 @@ async function main() {
                     gasTokenMetadata as any
                 ),
                 globalExitRoot: globalExitRoot,
-                timestamp: timestampReceipt,
                 sequencer: trustedSequencer,
-            } as any;
+            });
         }
     }
     outputJson.firstBatchData = batchData;
-    outputJson.genesis = rollupType.genesis;
-    outputJson.createRollupBlockNumber = blockDeploymentRollup.number;
-    outputJson.rollupAddress = createdRollupAddress;
-    outputJson.consensusContractName = consensusContractName;
     outputJson.rollupID = Number(rollupID);
-    const destPath = createRollupParameters.outputPath ? createRollupParameters.outputPath : `./create_new_rollup_output_${new Date().getTime() / 1000}.json`;
+
     fs.writeFileSync(path.join(__dirname, destPath), JSON.stringify(outputJson, null, 1));
-    console.log("Finished script, output saved at: ", argv.output);
+    console.log("Finished script, output saved at: ", destPath);
 }
 
 main().catch((e) => {
