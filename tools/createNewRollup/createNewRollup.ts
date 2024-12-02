@@ -26,7 +26,7 @@ async function main() {
     const dateStr = new Date().toISOString();
     const destPath = createRollupParameters.outputPath
         ? path.join(__dirname, createRollupParameters.outputPath)
-        : `./outputs/create_new_rollup_output_${createRollupParameters.type}_${dateStr}.json`;
+        : path.join(__dirname, `create_new_rollup_output_${createRollupParameters.type}_${dateStr}.json`);
 
     /*
      * Check deploy parameters
@@ -254,6 +254,7 @@ async function main() {
     outputJson.rollupAddress = createdRollupAddress;
     outputJson.genesis = rollupType.genesis;
     outputJson.gasTokenAddress = createRollupParameters.gasTokenAddress;
+    outputJson.rollupManagerAddress = createRollupParameters.rollupManagerAddress;
     if (createRollupParameters.type === createNewRollupTypes.TIMELOCK) {
         console.log("Creating timelock txs for rollup creation...");
         const salt = createRollupParameters.timelockSalt || ethers.ZeroHash;
@@ -320,7 +321,7 @@ async function main() {
         }
 
         outputJson.decodedScheduleData = convertBigIntsToNumbers(objectDecoded);
-        fs.writeFileSync(path.join(__dirname, destPath), JSON.stringify(outputJson, null, 1));
+        fs.writeFileSync(destPath, JSON.stringify(outputJson, null, 1));
         console.log("Finished script, output saved at: ", destPath);
         process.exit(0);
     } else if (createRollupParameters.type === createNewRollupTypes.MULTISIG) {
@@ -335,7 +336,7 @@ async function main() {
             networkName,
         ]);
         outputJson.txDeployRollupCalldata = txDeployRollupCalldata;
-        fs.writeFileSync(path.join(__dirname, destPath), JSON.stringify(outputJson, null, 1));
+        fs.writeFileSync(destPath, JSON.stringify(outputJson, null, 1));
         console.log("Finished script, output saved at: ", destPath);
         process.exit(0);
     } else {

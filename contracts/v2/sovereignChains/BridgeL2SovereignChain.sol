@@ -463,7 +463,7 @@ contract BridgeL2SovereignChain is
 
     /**
      * @notice Function to check if an index is claimed or not
-     * @dev function override to improve a bit the performance and bytecode not checking unnecessary conditions for sovereign chains context
+     * @dev function overridden to improve a bit the performance and bytecode not checking unnecessary conditions for sovereign chains context
      * @param leafIndex Index
      * @param sourceBridgeNetwork Origin network
      */
@@ -482,7 +482,7 @@ contract BridgeL2SovereignChain is
 
     /**
      * @notice Function to check that an index is not claimed and set it as claimed
-     * @dev function override to improve a bit the performance and bytecode not checking unnecessary conditions for sovereign chains context
+     * @dev function overridden to improve a bit the performance and bytecode not checking unnecessary conditions for sovereign chains context
      * @param leafIndex Index
      * @param sourceBridgeNetwork Origin network
      */
@@ -503,7 +503,7 @@ contract BridgeL2SovereignChain is
 
     /**
      * @notice Function to call token permit method of extended ERC20
-     * @dev We override this function from PolygonZkEVMBridgeV2 to improve a bit the performance and bytecode not checking unnecessary conditions for sovereign chains context
+     * @dev function overridden from PolygonZkEVMBridgeV2 to improve a bit the performance and bytecode not checking unnecessary conditions for sovereign chains context
      + @param token ERC20 token address
      * @param amount Quantity that is expected to be allowed
      * @param permitData Raw data of the call `permit` of the token

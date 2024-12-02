@@ -4,15 +4,37 @@ Script to call `createNewRollup` function.
 
 -   This script needs of a genesis as input only if we are trying to deploy a sovereign chain. The genesis will only be updated in case of trying to deploy a sovereign chain. In this case, this new sovereign genesis will be appended at the output file
 
-## Install
+## Setup
+
+- install packages
 
 ```
 npm i
 ```
 
-## Setup
+- Set env variables
+````
+cp .env.example .env
+````
 
--   Config file
+
+Fill `.env` with your `INFURA_PROJECT_ID` and `ETHERSCAN_API_KEY`
+
+-   Copy configuration files:
+
+```
+cp ./tools/createNewRollup/create_new_rollup.json.example ./tools/createNewRollup/create_new_rollup.json
+```
+
+-   Copy genesis file (only for sovereign chains)
+
+```
+cp ./tools/createNewRollup/genesis.json.example ./tools/createNewRollup/genesis.json
+```
+
+-   Set your parameters -> create_new_rollup.json
+
+
     - `type`: Specify the type of rollup creation, only available:
         - EOA: If creating the rollup from a wallet, the script will execute the creation of the rollup on the specified network
         - Multisig: If creating the rollup from a multisig, the script will output the calldata of the transaction to execute for creating the rollup
@@ -31,6 +53,7 @@ npm i
     - `timelockDelay(optional)`: timelock delay, only required on timelock type
     - `timelockSalt(optional)`: timelock salt, only required on timelock type
     -   `rollupManagerAddress`: Address of deployed rollupManager contract
+    -   `rollupTypeId`: The id of the rollup type of the rollup to deploy. WARNING: the type must match with the `consensusContractName`. Example: if the type is validium, the contract name has to be `PolygonValidiumEtrog`
     -   `isVanillaClient`: Flag for vanilla/sovereign clients handling
     -   `sovereignParams`:
         -   `bridgeManager`: bridge manager address
@@ -39,29 +62,22 @@ npm i
         -   `globalExitRootUpdater`: Address of globalExitRootUpdater for sovereign chains
         -   `globalExitRootRemover`: Address of globalExitRootRemover for sovereign chains
 
-## Usage
+-   Set your parameters -> genesis.json
+    - Is the genesis used to create the rollupType
+    - It is only necessary in case you want to create a sovereign/vanilla chain because it will be updated
 
-> All commands are done from root repository.
-
-### Call 'createNewRollup' from an EOA
-
--   Copy configuration files:
-
-```
-cp ./tools/createNewRollup/create_new_rollup.json.example ./tools/createNewRollup/create_new_rollup.json
-```
-
--   Copy genesis file (only for sovereign chains)
-
-```
-cp ./tools/createNewRollup/genesis.json.example ./tools/createNewRollup/genesis.json
-```
-
--   Set your parameters
 -   Run tool:
 
 ```
 npx hardhat run ./tools/createNewRollup/createNewRollup.ts --network sepolia
 ```
+
+### More Info
+- All commands are done from root repository.
+- The output files will be saved at `./tools/createNewRollup/create_new_rollup_output_{type}_{date}.json`
+- In case is a sovereign chain, the updated genesis is saved inside the output file, the original `genesis.json` is not modified
+- If the script fails, check the logs, most of the errors are handled and are auto explanatory
+
+
 
 Recommendation: run the tool from the interactive rollup manager cli -> https://github.com/0xPolygonHermez/rollup-manager-cli
