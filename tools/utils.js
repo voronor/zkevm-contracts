@@ -2,6 +2,7 @@
 /* eslint-disable no-restricted-syntax */
 const ethers = require('ethers');
 
+const supportedBridgeContracts = ['PolygonZkEVMBridgeV2 proxy', 'PolygonZkEVMBridge proxy', 'BridgeL2SovereignChain proxy'];
 function genOperation(target, value, data, predecessor, salt) {
     const abiEncoded = ethers.AbiCoder.defaultAbiCoder().encode(
         ['address', 'uint256', 'bytes', 'uint256', 'bytes32'],
@@ -50,5 +51,6 @@ function convertBigIntsToNumbers(obj) {
 module.exports = {
     genOperation,
     createNewRollupTypes,
-    convertBigIntsToNumbers
+    convertBigIntsToNumbers,
+    supportedBridgeContracts,
 };

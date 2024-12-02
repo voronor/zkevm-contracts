@@ -8,12 +8,13 @@ import * as dotenv from "dotenv";
 dotenv.config({path: path.resolve(__dirname, "../../.env")});
 import {ethers, upgrades} from "hardhat";
 
-const addRollupParameters = require("./add_rollup_type.json");
+const addRollupTypeParameters = require("./add_rollup_type.json");
 const genesis = require("./genesis.json");
 
 const dateStr = new Date().toISOString();
-const pathOutputJson = path.join(__dirname, `./add_rollup_type_output-${dateStr}.json`);
-import {PolygonRollupManager} from "../../typechain-types";
+const pathOutputJson = addRollupTypeParameters.outputPath
+    ? path.join(__dirname, addRollupTypeParameters.outputPath)
+    : path.join(__dirname, `./add_rollup_type_output-${dateStr}.json`);
 import "../../deployment/helpers/utils";
 
 async function main() {
@@ -34,7 +35,7 @@ async function main() {
     ];
 
     for (const parameterName of mandatoryDeploymentParameters) {
-        if (addRollupParameters[parameterName] === undefined || addRollupParameters[parameterName] === "") {
+        if (addRollupTypeParameters[parameterName] === undefined || addRollupTypeParameters[parameterName] === "") {
             throw new Error(`Missing parameter: ${parameterName}`);
         }
     }
@@ -48,10 +49,10 @@ async function main() {
         timelockDelay,
         genesisRoot,
         programVKey,
-    } = addRollupParameters;
+    } = addRollupTypeParameters;
 
-    const salt = addRollupParameters.timelockSalt || ethers.ZeroHash;
-    const predecessor = addRollupParameters.predecessor || ethers.ZeroHash;
+    const salt = addRollupTypeParameters.timelockSalt || ethers.ZeroHash;
+    const predecessor = addRollupTypeParameters.predecessor || ethers.ZeroHash;
 
     const supportedConsensus = [
         "PolygonZkEVMEtrog",
@@ -67,30 +68,30 @@ async function main() {
 
     // Load provider
     let currentProvider = ethers.provider;
-    if (addRollupParameters.multiplierGas || addRollupParameters.maxFeePerGas) {
+    if (addRollupTypeParameters.multiplierGas || addRollupTypeParameters.maxFeePerGas) {
         if (process.env.HARDHAT_NETWORK !== "hardhat") {
             currentProvider = ethers.getDefaultProvider(
                 `https://${process.env.HARDHAT_NETWORK}.infura.io/v3/${process.env.INFURA_PROJECT_ID}`
             ) as any;
-            if (addRollupParameters.maxPriorityFeePerGas && addRollupParameters.maxFeePerGas) {
+            if (addRollupTypeParameters.maxPriorityFeePerGas && addRollupTypeParameters.maxFeePerGas) {
                 console.log(
-                    `Hardcoded gas used: MaxPriority${addRollupParameters.maxPriorityFeePerGas} gwei, MaxFee${addRollupParameters.maxFeePerGas} gwei`
+                    `Hardcoded gas used: MaxPriority${addRollupTypeParameters.maxPriorityFeePerGas} gwei, MaxFee${addRollupTypeParameters.maxFeePerGas} gwei`
                 );
                 const FEE_DATA = new ethers.FeeData(
                     null,
-                    ethers.parseUnits(addRollupParameters.maxFeePerGas, "gwei"),
-                    ethers.parseUnits(addRollupParameters.maxPriorityFeePerGas, "gwei")
+                    ethers.parseUnits(addRollupTypeParameters.maxFeePerGas, "gwei"),
+                    ethers.parseUnits(addRollupTypeParameters.maxPriorityFeePerGas, "gwei")
                 );
 
                 currentProvider.getFeeData = async () => FEE_DATA;
             } else {
-                console.log("Multiplier gas used: ", addRollupParameters.multiplierGas);
+                console.log("Multiplier gas used: ", addRollupTypeParameters.multiplierGas);
                 async function overrideFeeData() {
                     const feeData = await ethers.provider.getFeeData();
                     return new ethers.FeeData(
                         null,
-                        ((feeData.maxFeePerGas as bigint) * BigInt(addRollupParameters.multiplierGas)) / 1000n,
-                        ((feeData.maxPriorityFeePerGas as bigint) * BigInt(addRollupParameters.multiplierGas)) / 1000n
+                        ((feeData.maxFeePerGas as bigint) * BigInt(addRollupTypeParameters.multiplierGas)) / 1000n,
+                        ((feeData.maxPriorityFeePerGas as bigint) * BigInt(addRollupTypeParameters.multiplierGas)) / 1000n
                     );
                 }
                 currentProvider.getFeeData = overrideFeeData;
@@ -100,8 +101,8 @@ async function main() {
 
     // Load deployer
     let deployer;
-    if (addRollupParameters.deployerPvtKey) {
-        deployer = new ethers.Wallet(addRollupParameters.deployerPvtKey, currentProvider);
+    if (addRollupTypeParameters.deployerPvtKey) {
+        deployer = new ethers.Wallet(addRollupTypeParameters.deployerPvtKey, currentProvider);
     } else if (process.env.MNEMONIC) {
         deployer = ethers.HDNodeWallet.fromMnemonic(
             ethers.Mnemonic.fromPhrase(process.env.MNEMONIC),
@@ -153,10 +154,10 @@ async function main() {
     let PolygonConsensusContractAddress;
 
     if (
-        typeof addRollupParameters.consensusContractAddress !== "undefined" &&
-        ethers.isAddress(addRollupParameters.consensusContractAddress)
+        typeof addRollupTypeParameters.consensusContractAddress !== "undefined" &&
+        ethers.isAddress(addRollupTypeParameters.consensusContractAddress)
     ) {
-        PolygonConsensusContractAddress = addRollupParameters.consensusContractAddress;
+        PolygonConsensusContractAddress = addRollupTypeParameters.consensusContractAddress;
     } else {
         PolygonConsensusContract = await PolygonConsensusFactory.deploy(
             polygonZkEVMGlobalExitRootAddress,

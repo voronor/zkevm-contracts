@@ -23,11 +23,10 @@ import {
 async function main() {
     console.log(`Starting script to create new rollup from ${createRollupParameters.type}...`);
     const outputJson = {} as any;
+    const dateStr = new Date().toISOString();
     const destPath = createRollupParameters.outputPath
-        ? createRollupParameters.outputPath
-        : `./outputs/create_new_rollup_output_${createRollupParameters.type}_${Math.floor(
-              new Date().getTime() / 1000
-          )}.json`;
+        ? path.join(__dirname, createRollupParameters.outputPath)
+        : `./outputs/create_new_rollup_output_${createRollupParameters.type}_${dateStr}.json`;
 
     /*
      * Check deploy parameters
@@ -105,14 +104,25 @@ async function main() {
             }
         }
         // Vanilla checks like in bridge contract
-        if(ethers.isAddress(createRollupParameters.gasTokenAddress) &&
-        createRollupParameters.gasTokenAddress !== ethers.ZeroAddress &&
-        sovereignParams.sovereignWETHAddress === ethers.ZeroAddress && sovereignParams.sovereignWETHAddressIsNotMintable === true) {
-            throw new Error("InvalidSovereignWETHAddressParams: if gasTokenAddress is not 0x0, and sovereignWETHAddress is 0x0, sovereignWETHAddressIsNotMintable must be false");
+        if (
+            ethers.isAddress(createRollupParameters.gasTokenAddress) &&
+            createRollupParameters.gasTokenAddress !== ethers.ZeroAddress &&
+            sovereignParams.sovereignWETHAddress === ethers.ZeroAddress &&
+            sovereignParams.sovereignWETHAddressIsNotMintable === true
+        ) {
+            throw new Error(
+                "InvalidSovereignWETHAddressParams: if gasTokenAddress is not 0x0, and sovereignWETHAddress is 0x0, sovereignWETHAddressIsNotMintable must be false"
+            );
         }
 
-        if(createRollupParameters.gasTokenAddress === ethers.ZeroAddress && (sovereignParams.sovereignWETHAddress !== ethers.ZeroAddress || sovereignParams.sovereignWETHAddressIsNotMintable === true)) {
-            throw new Error("InvalidSovereignWETHAddressParams: If gasTokenAddress is 0x0, sovereignWETHAddress must be 0x0 and sovereignWETHAddressIsNotMintable must be false");
+        if (
+            createRollupParameters.gasTokenAddress === ethers.ZeroAddress &&
+            (sovereignParams.sovereignWETHAddress !== ethers.ZeroAddress ||
+                sovereignParams.sovereignWETHAddressIsNotMintable === true)
+        ) {
+            throw new Error(
+                "InvalidSovereignWETHAddressParams: If gasTokenAddress is 0x0, sovereignWETHAddress must be 0x0 and sovereignWETHAddressIsNotMintable must be false"
+            );
         }
     }
 
@@ -542,7 +552,7 @@ async function main() {
     outputJson.firstBatchData = batchData;
     outputJson.rollupID = Number(rollupID);
 
-    fs.writeFileSync(path.join(__dirname, destPath), JSON.stringify(outputJson, null, 1));
+    fs.writeFileSync(destPath, JSON.stringify(outputJson, null, 1));
     console.log("Finished script, output saved at: ", destPath);
 }
 
