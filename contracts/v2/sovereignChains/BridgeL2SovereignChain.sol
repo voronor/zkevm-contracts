@@ -391,46 +391,6 @@ contract BridgeL2SovereignChain is
     }
 
     /**
-     * @notice Function to check if an index is claimed or not
-     * @dev function override to improve a bit the performance and bytecode not checking unnecessary conditions for sovereign chains context
-     * @param leafIndex Index
-     * @param sourceBridgeNetwork Origin network
-     */
-    function isClaimed(
-        uint32 leafIndex,
-        uint32 sourceBridgeNetwork
-    ) external view override returns (bool) {
-        uint256 globalIndex = uint256(leafIndex) +
-            uint256(sourceBridgeNetwork) *
-            _MAX_LEAFS_PER_NETWORK;
-
-        (uint256 wordPos, uint256 bitPos) = _bitmapPositions(globalIndex);
-        uint256 mask = (1 << bitPos);
-        return (claimedBitMap[wordPos] & mask) == mask;
-    }
-
-    /**
-     * @notice Function to check that an index is not claimed and set it as claimed
-     * @dev function override to improve a bit the performance and bytecode not checking unnecessary conditions for sovereign chains context
-     * @param leafIndex Index
-     * @param sourceBridgeNetwork Origin network
-     */
-    function _setAndCheckClaimed(
-        uint32 leafIndex,
-        uint32 sourceBridgeNetwork
-    ) internal override {
-        uint256 globalIndex = uint256(leafIndex) +
-            uint256(sourceBridgeNetwork) *
-            _MAX_LEAFS_PER_NETWORK;
-        (uint256 wordPos, uint256 bitPos) = _bitmapPositions(globalIndex);
-        uint256 mask = 1 << bitPos;
-        uint256 flipped = claimedBitMap[wordPos] ^= mask;
-        if (flipped & mask == 0) {
-            revert AlreadyClaimed();
-        }
-    }
-
-    /**
      * @notice Burn tokens from wrapped token to execute the bridge, if the token is not mintable it will be transferred
      * note This function has been extracted to be able to override it by other contracts like Bridge2SovereignChain
      * @param tokenWrapped Wrapped token to burnt
@@ -489,18 +449,56 @@ contract BridgeL2SovereignChain is
         uint32 leafIndex,
         uint32 sourceBridgeNetwork
     ) private {
+         uint256 globalIndex = uint256(leafIndex) +
+            uint256(sourceBridgeNetwork) *
+            _MAX_LEAFS_PER_NETWORK;
+        (uint256 wordPos, uint256 bitPos) = _bitmapPositions(globalIndex);
+        uint256 mask = 1 << bitPos;
+        uint256 flipped = claimedBitMap[wordPos] ^= mask;
+        if (flipped & mask != 0) {
+            revert ClaimNotSet();
+        }
+        emit UnsetClaim(leafIndex, sourceBridgeNetwork);
+    }
+
+    /**
+     * @notice Function to check if an index is claimed or not
+     * @dev function override to improve a bit the performance and bytecode not checking unnecessary conditions for sovereign chains context
+     * @param leafIndex Index
+     * @param sourceBridgeNetwork Origin network
+     */
+    function isClaimed(
+        uint32 leafIndex,
+        uint32 sourceBridgeNetwork
+    ) external view override returns (bool) {
+        uint256 globalIndex = uint256(leafIndex) +
+            uint256(sourceBridgeNetwork) *
+            _MAX_LEAFS_PER_NETWORK;
+
+        (uint256 wordPos, uint256 bitPos) = _bitmapPositions(globalIndex);
+        uint256 mask = (1 << bitPos);
+        return (claimedBitMap[wordPos] & mask) == mask;
+    }
+
+    /**
+     * @notice Function to check that an index is not claimed and set it as claimed
+     * @dev function override to improve a bit the performance and bytecode not checking unnecessary conditions for sovereign chains context
+     * @param leafIndex Index
+     * @param sourceBridgeNetwork Origin network
+     */
+    function _setAndCheckClaimed(
+        uint32 leafIndex,
+        uint32 sourceBridgeNetwork
+    ) internal override {
         uint256 globalIndex = uint256(leafIndex) +
             uint256(sourceBridgeNetwork) *
             _MAX_LEAFS_PER_NETWORK;
         (uint256 wordPos, uint256 bitPos) = _bitmapPositions(globalIndex);
-        uint256 mask = ~(1 << bitPos);
-        // Check if the bit is already unset
-        if ((claimedBitMap[wordPos] & (1 << bitPos)) == 0) {
-            revert ClaimNotSet();
+        uint256 mask = 1 << bitPos;
+        uint256 flipped = claimedBitMap[wordPos] ^= mask;
+        if (flipped & mask == 0) {
+            revert AlreadyClaimed();
         }
-        // Use bitwise AND with the negated mask to unset the bit
-        claimedBitMap[wordPos] &= mask;
-        emit UnsetClaim(leafIndex, sourceBridgeNetwork);
     }
 
     /**

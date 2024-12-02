@@ -36,10 +36,10 @@ contract PolygonZkEVMBridgeV2 is
     bytes4 internal constant _PERMIT_SIGNATURE_DAI = 0x8fcbaf0c;
 
     // Mainnet identifier
-    uint32 internal constant _MAINNET_NETWORK_ID = 0;
+    uint32 private constant _MAINNET_NETWORK_ID = 0;
 
     // ZkEVM identifier
-    uint32 internal constant _ZKEVM_NETWORK_ID = 1;
+    uint32 private constant _ZKEVM_NETWORK_ID = 1;
 
     // Leaf type asset
     uint8 private constant _LEAF_TYPE_ASSET = 0;
