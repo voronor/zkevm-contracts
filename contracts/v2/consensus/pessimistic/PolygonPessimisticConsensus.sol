@@ -14,7 +14,7 @@ contract PolygonPessimisticConsensus is
      * @param _globalExitRootManager Global exit root manager address
      * @param _pol POL token address
      * @param _bridgeAddress Bridge address
-     * @param _rollupManager Global exit root manager address
+     * @param _rollupManager Rollup manager address
      */
     constructor(
         IPolygonZkEVMGlobalExitRootV2 _globalExitRootManager,
