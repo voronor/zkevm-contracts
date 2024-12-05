@@ -3,11 +3,5 @@
     "newMinDelay": 1800,
     "timeLockDelay": "",
     "predecessor": "",
-    "timelockSalt": "",
-    "deployerPvtKey": "",
-    "maxFeePerGas": "",
-    "maxPriorityFeePerGas": "",
-    "multiplierGas": "",
-    "sendSchedule": false,
-    "sendExecute": false
+    "timelockSalt": ""
 }
