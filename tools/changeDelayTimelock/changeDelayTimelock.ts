@@ -1,6 +1,6 @@
 /* eslint-disable no-await-in-loop, no-use-before-define, no-lonely-if */
 /* eslint-disable no-console, no-inner-declarations, no-undef, import/no-unresolved */
-import {expect} from "chai";
+import {utils} from "ffjavascript";
 import path = require("path");
 import fs = require("fs");
 
@@ -66,13 +66,36 @@ async function main() {
    
     outputJson.scheduleData = scheduleData;
     outputJson.executeData = executeData;
-    outputJson.minDelay = timelockDelay;
-    outputJson.functionData = {
-        function: 'updateDelay',
-        parameters: parameters.newMinDelay
-    }
 
-    await fs.writeFileSync(pathOutputJson, JSON.stringify(outputJson, null, 1));
+    // Decode the scheduleData for better readability
+    const timelockTx = timelockContractFactory.interface.parseTransaction({data: scheduleData});
+    const paramsArray = timelockTx?.fragment.inputs as any;
+    const objectDecoded = {} as any;
+
+    for (let i = 0; i < paramsArray?.length; i++) {
+        const currentParam = paramsArray[i];
+        objectDecoded[currentParam.name] = timelockTx?.args[i];
+
+        if (currentParam.name == "data") {
+            const decodedTimelockTx = timelockContractFactory.interface.parseTransaction({
+                data: timelockTx?.args[i],
+            });
+            const objectDecodedData = {} as any;
+            const paramsArrayData = decodedTimelockTx?.fragment.inputs as any;
+
+            objectDecodedData.signature = decodedTimelockTx?.signature;
+            objectDecodedData.selector = decodedTimelockTx?.selector;
+
+            for (let j = 0; j < paramsArrayData?.length; j++) {
+                const currentParam = paramsArrayData[j];
+                objectDecodedData[currentParam.name] = decodedTimelockTx?.args[j];
+            }
+            objectDecoded["decodedData"] = objectDecodedData;
+        }
+    }
+    outputJson.decodedScheduleData = objectDecoded;
+
+    await fs.writeFileSync(pathOutputJson, JSON.stringify(utils.stringifyBigInts(outputJson), null, 1));
 }
 
 // OZ test functions
