@@ -28,6 +28,9 @@ const createNewRollupTypes = {
 // Function to recursively convert BigInts to Numbers
 function convertBigIntsToNumbers(obj) {
     if (typeof obj === 'bigint') {
+        if (obj > BigInt(Number.MAX_SAFE_INTEGER)) {
+            throw new Error(`convertBigIntsToNumbers: BigInt exceeds maximum safe integer: ${obj}`);
+        }
         return Number(obj); // Convert BigInt to Number
     }
 

@@ -13,8 +13,8 @@ const genesis = require("./genesis.json");
 
 const dateStr = new Date().toISOString();
 const pathOutputJson = addRollupTypeParameters.outputPath
-        ? path.join(__dirname, addRollupTypeParameters.outputPath)
-        : path.join(__dirname, `./add_rollup_type_output-${dateStr}.json`);;
+    ? path.join(__dirname, addRollupTypeParameters.outputPath)
+    : path.join(__dirname, `./add_rollup_type_output-${dateStr}.json`);
 
 import {PolygonRollupManager} from "../../typechain-types";
 import "../../deployment/helpers/utils";
@@ -195,7 +195,6 @@ async function main() {
                 ],
             });
         } catch (e) {
-            console.log(e)
             console.log("Automatic verification failed. Please verify the contract manually.");
             console.log("you can verify the new impl address with:");
             console.log(

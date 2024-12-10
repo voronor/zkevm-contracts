@@ -6,7 +6,7 @@ import fs = require("fs");
 
 import * as dotenv from "dotenv";
 dotenv.config({path: path.resolve(__dirname, "../../.env")});
-import {ethers, upgrades} from "hardhat";
+import {ethers, run} from "hardhat";
 
 const addRollupTypeParameters = require("./add_rollup_type.json");
 const genesis = require("./genesis.json");
@@ -16,6 +16,7 @@ const pathOutputJson = addRollupTypeParameters.outputPath
     ? path.join(__dirname, addRollupTypeParameters.outputPath)
     : path.join(__dirname, `./add_rollup_type_output-${dateStr}.json`);
 import "../../deployment/helpers/utils";
+import {supportedBridgeContracts} from "../utils";
 
 async function main() {
     const outputJson = {} as any;
@@ -91,7 +92,8 @@ async function main() {
                     return new ethers.FeeData(
                         null,
                         ((feeData.maxFeePerGas as bigint) * BigInt(addRollupTypeParameters.multiplierGas)) / 1000n,
-                        ((feeData.maxPriorityFeePerGas as bigint) * BigInt(addRollupTypeParameters.multiplierGas)) / 1000n
+                        ((feeData.maxPriorityFeePerGas as bigint) * BigInt(addRollupTypeParameters.multiplierGas)) /
+                            1000n
                     );
                 }
                 currentProvider.getFeeData = overrideFeeData;
@@ -134,16 +136,18 @@ async function main() {
 
         // get bridge address in genesis file
         let genesisBridgeAddress = ethers.ZeroAddress;
+        let bridgeContractName = "";
         for (let i = 0; i < genesis.genesis.length; i++) {
-            if (genesis.genesis[i].contractName === "PolygonZkEVMBridge proxy") {
+            if (supportedBridgeContracts.includes(genesis.genesis[i].contractName)) {
                 genesisBridgeAddress = genesis.genesis[i].address;
+                bridgeContractName = genesis.genesis[i].contractName;
                 break;
             }
         }
 
         if (polygonZkEVMBridgeAddress.toLowerCase() !== genesisBridgeAddress.toLowerCase()) {
             throw new Error(
-                `'PolygonZkEVMBridge proxy' root in the 'genesis.json' does not match 'bridgeAddress' in the 'PolygonRollupManager'`
+                `'${bridgeContractName}' root in the 'genesis.json' does not match 'bridgeAddress' in the 'PolygonRollupManager'`
             );
         }
     }
@@ -173,16 +177,30 @@ async function main() {
         console.log(`new consensus name: ${consensusContract}`);
         console.log(`new PolygonConsensusContract impl: ${PolygonConsensusContractAddress}`);
 
-        console.log("you can verify the new impl address with:");
-        console.log(
-            `npx hardhat verify --constructor-args upgrade/arguments.js ${PolygonConsensusContractAddress} --network ${process.env.HARDHAT_NETWORK}\n`
-        );
-        console.log("Copy the following constructor arguments on: upgrade/arguments.js \n", [
-            polygonZkEVMGlobalExitRootAddress,
-            polTokenAddress,
-            polygonZkEVMBridgeAddress,
-            polygonRollupManagerAddress,
-        ]);
+        try {
+            console.log("Verifying contract...");
+            await run("verify:verify", {
+                address: PolygonConsensusContract.target,
+                constructorArguments: [
+                    polygonZkEVMGlobalExitRootAddress,
+                    polTokenAddress,
+                    polygonZkEVMBridgeAddress,
+                    polygonRollupManagerAddress,
+                ],
+            });
+        } catch (e) {
+            console.log("Automatic verification failed. Please verify the contract manually.");
+            console.log("you can verify the new impl address with:");
+            console.log(
+                `npx hardhat verify --constructor-args upgrade/arguments.js ${PolygonConsensusContract.target} --network ${process.env.HARDHAT_NETWORK}\n`
+            );
+            console.log("Copy the following constructor arguments on: upgrade/arguments.js \n", [
+                polygonZkEVMGlobalExitRootAddress,
+                polTokenAddress,
+                polygonZkEVMBridgeAddress,
+                polygonRollupManagerAddress,
+            ]);
+        }
     }
 
     // load timelock

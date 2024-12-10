@@ -207,11 +207,15 @@ async function main() {
         consensusContractName === ConsensusContracts.PolygonPessimisticConsensus &&
         verifierType !== VerifierType.Pessimistic
     ) {
-        throw new Error(`Verifier type should be ${VerifierType.StateTransition} for ${consensusContractName}`);
+        throw new Error(
+            `Mismatch RollupTypeID: Verifier type should be ${VerifierType.StateTransition} for ${consensusContractName}`
+        );
     }
     if (consensusContractName !== ConsensusContracts.PolygonPessimisticConsensus) {
         if (verifierType !== VerifierType.StateTransition) {
-            throw new Error(`Verifier type should be ${VerifierType.Pessimistic} for ${consensusContractName}`);
+            throw new Error(
+                `Mismatch RollupTypeID: Verifier type should be ${VerifierType.Pessimistic} for ${consensusContractName}`
+            );
         }
         const polygonValidiumConsensusFactory = (await ethers.getContractFactory(
             ConsensusContracts.PolygonValidiumEtrog,
@@ -220,22 +224,32 @@ async function main() {
         const polygonValidiumConsensusContract = polygonValidiumConsensusFactory.attach(
             consensusContractAddress
         ) as PolygonValidiumEtrog;
+
+        let hasMethodImplemented;
+
         try {
-            await polygonValidiumConsensusContract.isSequenceWithDataAvailabilityAllowed();
-            if (consensusContractName === ConsensusContracts.PolygonZkEVMEtrog) {
-                throw new Error(
-                    `The consensus contract at ${consensusContractAddress} does not have the public var isSequenceWithDataAvailabilityAllowed, this means is a validium and you are trying to create a rollup`
-                );
-            }
-        } catch (e) {
-            // If it reverts means that the function is not in the contract so the deployed consensus is a PolygonZKEVMEtrog, else is Validium
+            hasMethodImplemented = await polygonValidiumConsensusContract.isSequenceWithDataAvailabilityAllowed();
+        } catch (error) {
+            console.log("RollupTypeID selected ");
+        }
+
+        // Consensus PolygonZkEVMEtrog: if 'hasMethodImplemented' does not have any value
+        if (typeof hasMethodImplemented === "undefined") {
             if (consensusContractName === ConsensusContracts.PolygonValidiumEtrog) {
                 throw new Error(
-                    `The consensus contract at ${consensusContractAddress} does not have the public var isSequenceWithDataAvailabilityAllowed, this means is a rollup and you are trying to create a validium`
+                    `The consensus contract at ${consensusContractAddress} does not have the public method "isSequenceWithDataAvailabilityAllowed", this means is a rollup and you are trying to create a validium`
+                );
+            }
+        } else {
+            // Consensus PolygonValidiumEtrog: if 'hasMethodImplemented' does not have any value
+            if (consensusContractName === ConsensusContracts.PolygonZkEVMEtrog) {
+                throw new Error(
+                    `The consensus contract at ${consensusContractAddress} does have the public var "isSequenceWithDataAvailabilityAllowed", this means is a validium and you are trying to create a rollup`
                 );
             }
         }
     }
+
     // Grant role CREATE_ROLLUP_ROLE to deployer
     const CREATE_ROLLUP_ROLE = ethers.id("CREATE_ROLLUP_ROLE");
     if ((await rollupManagerContract.hasRole(CREATE_ROLLUP_ROLE, deployer.address)) == false)
