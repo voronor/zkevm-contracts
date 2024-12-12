@@ -174,9 +174,12 @@ async function updateVanillaGenesis(genesis, chainID, initializeParams) {
     await batch2.executeTxs();
     await zkEVMDB2.consolidate(batch2);
 
-    // Update bridgeProxy storage
+    // Update bridgeProxy storage and nonce
     bridgeProxy.contractName = bridgeContractName + " proxy";
     bridgeProxy.storage = await zkEVMDB2.dumpStorage(bridgeProxy.address);
+    // Update nonce, in case weth is deployed at initialize, it is increased
+    const bridgeProxyState = await zkEVMDB2.getCurrentAccountState(bridgeProxy.address)
+    bridgeProxy.nonce = String(Number(bridgeProxyState.nonce));
     // If bridge initialized with a zero sovereign weth address and a non zero gas token, we should add created erc20 weth contract to the genesis
     let wethAddress;
     if (

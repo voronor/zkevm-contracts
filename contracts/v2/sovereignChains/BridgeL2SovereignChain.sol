@@ -212,7 +212,7 @@ contract BridgeL2SovereignChain is
      * @notice The tokenInfoToWrappedToken mapping  value is replaced by the new sovereign address but it's not the case for the wrappedTokenToTokenInfo map where the value is added, this way user will always be able to withdraw their tokens
      * @notice The number of decimals between sovereign token and origin token is not checked, it doesn't affect the bridge functionality but the UI.
      * @param originNetwork Origin network
-     * @param originTokenAddress Origin token address, 0 address is reserved for ether
+     * @param originTokenAddress Origin token address, 0 address is reserved for gas token address. If WETH address is zero, means this gas token is ether, else means is a custom erc20 gas token
      * @param sovereignTokenAddress Address of the sovereign wrapped token
      * @param isNotMintable Flag to indicate if the wrapped token is not mintable
      */
@@ -463,7 +463,7 @@ contract BridgeL2SovereignChain is
 
     /**
      * @notice Function to check if an index is claimed or not
-     * @dev function override to improve a bit the performance and bytecode not checking unnecessary conditions for sovereign chains context
+     * @dev function overridden to improve a bit the performance and bytecode not checking unnecessary conditions for sovereign chains context
      * @param leafIndex Index
      * @param sourceBridgeNetwork Origin network
      */
@@ -482,7 +482,7 @@ contract BridgeL2SovereignChain is
 
     /**
      * @notice Function to check that an index is not claimed and set it as claimed
-     * @dev function override to improve a bit the performance and bytecode not checking unnecessary conditions for sovereign chains context
+     * @dev function overridden to improve a bit the performance and bytecode not checking unnecessary conditions for sovereign chains context
      * @param leafIndex Index
      * @param sourceBridgeNetwork Origin network
      */
@@ -503,7 +503,7 @@ contract BridgeL2SovereignChain is
 
     /**
      * @notice Function to call token permit method of extended ERC20
-     * @dev We override this function from PolygonZkEVMBridgeV2 to improve a bit the performance and bytecode not checking unnecessary conditions for sovereign chains context
+     * @dev function overridden from PolygonZkEVMBridgeV2 to improve a bit the performance and bytecode not checking unnecessary conditions for sovereign chains context
      + @param token ERC20 token address
      * @param amount Quantity that is expected to be allowed
      * @param permitData Raw data of the call `permit` of the token

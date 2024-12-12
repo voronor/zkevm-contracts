@@ -6,23 +6,26 @@ import fs = require("fs");
 
 import * as dotenv from "dotenv";
 dotenv.config({path: path.resolve(__dirname, "../../.env")});
-import {ethers, upgrades} from "hardhat";
+import {ethers, run} from "hardhat";
 
-const addRollupParameters = require("./add_rollup_type.json");
+const addRollupTypeParameters = require("./add_rollup_type.json");
 const genesis = require("./genesis.json");
 
 const dateStr = new Date().toISOString();
-const pathOutputJson = path.join(__dirname, `./add_rollup_type_output-${dateStr}.json`);
+const pathOutputJson = addRollupTypeParameters.outputPath
+    ? path.join(__dirname, addRollupTypeParameters.outputPath)
+    : path.join(__dirname, `./add_rollup_type_output-${dateStr}.json`);
 
 import {PolygonRollupManager} from "../../typechain-types";
 import "../../deployment/helpers/utils";
+import {supportedBridgeContracts} from "../utils";
 
 async function main() {
     const outputJson = {} as any;
 
     /*
      * Check deploy parameters
-     * Check that every necessary parameter is fullfilled
+     * Check that every necessary parameter is fulfilled
      */
     const mandatoryDeploymentParameters = [
         "description",
@@ -35,7 +38,7 @@ async function main() {
     ];
 
     for (const parameterName of mandatoryDeploymentParameters) {
-        if (addRollupParameters[parameterName] === undefined || addRollupParameters[parameterName] === "") {
+        if (addRollupTypeParameters[parameterName] === undefined || addRollupTypeParameters[parameterName] === "") {
             throw new Error(`Missing parameter: ${parameterName}`);
         }
     }
@@ -48,41 +51,42 @@ async function main() {
         verifierAddress,
         genesisRoot,
         programVKey,
-    } = addRollupParameters;
+    } = addRollupTypeParameters;
 
-    const supportedConensus = ["PolygonZkEVMEtrog", "PolygonValidiumEtrog", "PolygonPessimisticConsensus"];
+    const supportedConsensus = ["PolygonZkEVMEtrog", "PolygonValidiumEtrog", "PolygonPessimisticConsensus"];
     const isPessimistic = consensusContract === "PolygonPessimisticConsensus";
 
-    if (!supportedConensus.includes(consensusContract)) {
-        throw new Error(`Consensus contract not supported, supported contracts are: ${supportedConensus}`);
+    if (!supportedConsensus.includes(consensusContract)) {
+        throw new Error(`Consensus contract not supported, supported contracts are: ${supportedConsensus}`);
     }
 
     // Load provider
     let currentProvider = ethers.provider;
-    if (addRollupParameters.multiplierGas || addRollupParameters.maxFeePerGas) {
+    if (addRollupTypeParameters.multiplierGas || addRollupTypeParameters.maxFeePerGas) {
         if (process.env.HARDHAT_NETWORK !== "hardhat") {
             currentProvider = ethers.getDefaultProvider(
                 `https://${process.env.HARDHAT_NETWORK}.infura.io/v3/${process.env.INFURA_PROJECT_ID}`
             ) as any;
-            if (addRollupParameters.maxPriorityFeePerGas && addRollupParameters.maxFeePerGas) {
+            if (addRollupTypeParameters.maxPriorityFeePerGas && addRollupTypeParameters.maxFeePerGas) {
                 console.log(
-                    `Hardcoded gas used: MaxPriority${addRollupParameters.maxPriorityFeePerGas} gwei, MaxFee${addRollupParameters.maxFeePerGas} gwei`
+                    `Hardcoded gas used: MaxPriority${addRollupTypeParameters.maxPriorityFeePerGas} gwei, MaxFee${addRollupTypeParameters.maxFeePerGas} gwei`
                 );
                 const FEE_DATA = new ethers.FeeData(
                     null,
-                    ethers.parseUnits(addRollupParameters.maxFeePerGas, "gwei"),
-                    ethers.parseUnits(addRollupParameters.maxPriorityFeePerGas, "gwei")
+                    ethers.parseUnits(addRollupTypeParameters.maxFeePerGas, "gwei"),
+                    ethers.parseUnits(addRollupTypeParameters.maxPriorityFeePerGas, "gwei")
                 );
 
                 currentProvider.getFeeData = async () => FEE_DATA;
             } else {
-                console.log("Multiplier gas used: ", addRollupParameters.multiplierGas);
+                console.log("Multiplier gas used: ", addRollupTypeParameters.multiplierGas);
                 async function overrideFeeData() {
                     const feedata = await ethers.provider.getFeeData();
                     return new ethers.FeeData(
                         null,
-                        ((feedata.maxFeePerGas as bigint) * BigInt(addRollupParameters.multiplierGas)) / 1000n,
-                        ((feedata.maxPriorityFeePerGas as bigint) * BigInt(addRollupParameters.multiplierGas)) / 1000n
+                        ((feedata.maxFeePerGas as bigint) * BigInt(addRollupTypeParameters.multiplierGas)) / 1000n,
+                        ((feedata.maxPriorityFeePerGas as bigint) * BigInt(addRollupTypeParameters.multiplierGas)) /
+                            1000n
                     );
                 }
                 currentProvider.getFeeData = overrideFeeData;
@@ -92,8 +96,8 @@ async function main() {
 
     // Load deployer
     let deployer;
-    if (addRollupParameters.deployerPvtKey) {
-        deployer = new ethers.Wallet(addRollupParameters.deployerPvtKey, currentProvider);
+    if (addRollupTypeParameters.deployerPvtKey) {
+        deployer = new ethers.Wallet(addRollupTypeParameters.deployerPvtKey, currentProvider);
     } else if (process.env.MNEMONIC) {
         deployer = ethers.HDNodeWallet.fromMnemonic(
             ethers.Mnemonic.fromPhrase(process.env.MNEMONIC),
@@ -125,16 +129,18 @@ async function main() {
 
         // get bridge address in genesis file
         let genesisBridgeAddress = ethers.ZeroAddress;
+        let bridgeContractName = "";
         for (let i = 0; i < genesis.genesis.length; i++) {
-            if (genesis.genesis[i].contractName === "PolygonZkEVMBridge proxy") {
+            if (supportedBridgeContracts.includes(genesis.genesis[i].contractName)) {
                 genesisBridgeAddress = genesis.genesis[i].address;
+                bridgeContractName = genesis.genesis[i].contractName;
                 break;
             }
         }
 
         if (polygonZkEVMBridgeAddress.toLowerCase() !== genesisBridgeAddress.toLowerCase()) {
             throw new Error(
-                `'PolygonZkEVMBridge proxy' root in the 'genesis.json' does not match 'bridgeAddress' in the 'PolygonRollupManager'`
+                `'${bridgeContractName}' root in the 'genesis.json' does not match 'bridgeAddress' in the 'PolygonRollupManager'`
             );
         }
     }
@@ -158,38 +164,50 @@ async function main() {
     let consensusContractAddress;
 
     if (
-        typeof addRollupParameters.consensusContractAddress !== "undefined" &&
-        ethers.isAddress(addRollupParameters.consensusContractAddress)
+        typeof addRollupTypeParameters.consensusContractAddress !== "undefined" &&
+        ethers.isAddress(addRollupTypeParameters.consensusContractAddress)
     ) {
-        consensusContractAddress = addRollupParameters.consensusContractAddress;
+        consensusContractAddress = addRollupTypeParameters.consensusContractAddress;
     } else {
-        const PolygonconsensusFactory = (await ethers.getContractFactory(consensusContract, deployer)) as any;
-        let PolygonconsensusContract;
+        const PolygonConsensusFactory = (await ethers.getContractFactory(consensusContract, deployer)) as any;
+        let PolygonConsensusContract;
 
-        PolygonconsensusContract = await PolygonconsensusFactory.deploy(
+        PolygonConsensusContract = await PolygonConsensusFactory.deploy(
             polygonZkEVMGlobalExitRootAddress,
             polTokenAddress,
             polygonZkEVMBridgeAddress,
             polygonRollupManagerAddress
         );
-        await PolygonconsensusContract.waitForDeployment();
-
+        await PolygonConsensusContract.waitForDeployment();
         console.log("#######################\n");
         console.log(`new consensus name: ${consensusContract}`);
-        console.log(`new PolygonconsensusContract impl: ${PolygonconsensusContract.target}`);
+        console.log(`new PolygonConsensusContract impl: ${PolygonConsensusContract.target}`);
 
-        console.log("you can verify the new impl address with:");
-        console.log(
-            `npx hardhat verify --constructor-args upgrade/arguments.js ${PolygonconsensusContract.target} --network ${process.env.HARDHAT_NETWORK}\n`
-        );
-        console.log("Copy the following constructor arguments on: upgrade/arguments.js \n", [
-            polygonZkEVMGlobalExitRootAddress,
-            polTokenAddress,
-            polygonZkEVMBridgeAddress,
-            polygonRollupManagerAddress,
-        ]);
-
-        consensusContractAddress = PolygonconsensusContract.target;
+        try {
+            console.log("Verifying contract...");
+            await run("verify:verify", {
+                address: PolygonConsensusContract.target,
+                constructorArguments: [
+                    polygonZkEVMGlobalExitRootAddress,
+                    polTokenAddress,
+                    polygonZkEVMBridgeAddress,
+                    polygonRollupManagerAddress,
+                ],
+            });
+        } catch (e) {
+            console.log("Automatic verification failed. Please verify the contract manually.");
+            console.log("you can verify the new impl address with:");
+            console.log(
+                `npx hardhat verify --constructor-args upgrade/arguments.js ${PolygonConsensusContract.target} --network ${process.env.HARDHAT_NETWORK}\n`
+            );
+            console.log("Copy the following constructor arguments on: upgrade/arguments.js \n", [
+                polygonZkEVMGlobalExitRootAddress,
+                polTokenAddress,
+                polygonZkEVMBridgeAddress,
+                polygonRollupManagerAddress,
+            ]);
+        }
+        consensusContractAddress = PolygonConsensusContract.target;
     }
 
     // Add a new rollup type
