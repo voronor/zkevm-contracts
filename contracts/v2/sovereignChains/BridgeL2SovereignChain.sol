@@ -297,7 +297,8 @@ contract BridgeL2SovereignChain is
 
     /**
      * @notice Set the custom wrapper for weth
-     * @notice If this function is called multiple times this will override the previous calls and only keep the last sovereignTokenAddress.
+     * @notice If this function is called multiple times this will override the previous calls and only keep the last WETHToken.
+     * @notice WETH will not maintain legacy versions.Users easily should be able to unwrapp the legacy WETH and unwrapp it with the new one.
      * @param sovereignWETHTokenAddress Address of the sovereign weth token
      * @param isNotMintable Flag to indicate if the wrapped token is not mintable
      */
