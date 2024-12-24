@@ -8,6 +8,7 @@ import "../PolygonZkEVMBridgeV2.sol";
 /**
  * Sovereign chains bridge that will be deployed on all Sovereign chains
  * Contract responsible to manage the token interactions with other networks
+ * This contract is not meant to replace the current zkEVM bridge contract, but deployed on sovereign networks
  */
 contract BridgeL2SovereignChain is
     PolygonZkEVMBridgeV2,
@@ -449,7 +450,7 @@ contract BridgeL2SovereignChain is
         uint32 leafIndex,
         uint32 sourceBridgeNetwork
     ) private {
-         uint256 globalIndex = uint256(leafIndex) +
+        uint256 globalIndex = uint256(leafIndex) +
             uint256(sourceBridgeNetwork) *
             _MAX_LEAFS_PER_NETWORK;
         (uint256 wordPos, uint256 bitPos) = _bitmapPositions(globalIndex);
