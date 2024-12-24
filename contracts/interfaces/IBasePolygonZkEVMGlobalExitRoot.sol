@@ -14,6 +14,11 @@ interface IBasePolygonZkEVMGlobalExitRoot {
     error OnlyGlobalExitRootUpdater();
 
     /**
+     * @dev Thrown when the caller is not the globalExitRootRemover
+     */
+    error OnlyGlobalExitRootRemover();
+
+    /**
      * @dev Thrown when trying to insert a global exit root that is already set
      */
     error GlobalExitRootAlreadySet();

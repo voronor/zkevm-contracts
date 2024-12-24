@@ -88,14 +88,11 @@ describe("SovereignChainBridge Gas tokens tests", () => {
             tokenInitialBalance
         );
         const tokenWrappedFactory = await ethers.getContractFactory("TokenWrapped");
-         await ethers.provider.send("hardhat_impersonateAccount", [sovereignChainBridgeContract.target]);
+        await ethers.provider.send("hardhat_impersonateAccount", [sovereignChainBridgeContract.target]);
         const bridgeMock = await ethers.getSigner(sovereignChainBridgeContract.target as any);
-        WETHToken = await tokenWrappedFactory.connect(bridgeMock).deploy(
-            tokenName,
-            tokenSymbol,
-            decimals,
-            {gasPrice: 0}
-        );
+        WETHToken = await tokenWrappedFactory
+            .connect(bridgeMock)
+            .deploy(tokenName, tokenSymbol, decimals, {gasPrice: 0});
 
         gasTokenAddress = polTokenContract.target;
         gasTokenNetwork = 0;
@@ -110,7 +107,7 @@ describe("SovereignChainBridge Gas tokens tests", () => {
             metadataToken,
             ethers.Typed.address(bridgeManager.address),
             WETHToken.target,
-            false
+            false,
         );
         expect(await sovereignChainBridgeContract.WETHToken()).to.be.equal(WETHToken.target);
     });
@@ -185,7 +182,9 @@ describe("SovereignChainBridge Gas tokens tests", () => {
             await sovereignChainBridgeContract.verifyMerkleProof(leafValue, proofLocal, index, rootJSRollup)
         ).to.be.equal(true);
         // Remap weth token
-        await expect(sovereignChainBridgeContract.connect(bridgeManager).setSovereignWETHAddress(sovereignToken.target, true))
+        await expect(
+            sovereignChainBridgeContract.connect(bridgeManager).setSovereignWETHAddress(sovereignToken.target, true)
+        )
             .to.emit(sovereignChainBridgeContract, "SetSovereignWETHAddress")
             .withArgs(sovereignToken.target, true);
         // try claim without balance to transfer (from bridge)
@@ -203,8 +202,7 @@ describe("SovereignChainBridge Gas tokens tests", () => {
                 amount,
                 metadata
             )
-        )
-            .to.revertedWith("ERC20: transfer amount exceeds balance");
+        ).to.revertedWith("ERC20: transfer amount exceeds balance");
         // Transfer tokens to bridge
         await sovereignToken.transfer(sovereignChainBridgeContract.target, amount);
         const balanceBridge = await sovereignToken.balanceOf(sovereignChainBridgeContract.target);

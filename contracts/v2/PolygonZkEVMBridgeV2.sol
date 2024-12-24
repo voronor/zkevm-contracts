@@ -30,10 +30,10 @@ contract PolygonZkEVMBridgeV2 is
     }
 
     // bytes4(keccak256(bytes("permit(address,address,uint256,uint256,uint8,bytes32,bytes32)")));
-    bytes4 private constant _PERMIT_SIGNATURE = 0xd505accf;
+    bytes4 internal constant _PERMIT_SIGNATURE = 0xd505accf;
 
     // bytes4(keccak256(bytes("permit(address,address,uint256,uint256,bool,uint8,bytes32,bytes32)")));
-    bytes4 private constant _PERMIT_SIGNATURE_DAI = 0x8fcbaf0c;
+    bytes4 internal constant _PERMIT_SIGNATURE_DAI = 0x8fcbaf0c;
 
     // Mainnet identifier
     uint32 private constant _MAINNET_NETWORK_ID = 0;
@@ -48,7 +48,7 @@ contract PolygonZkEVMBridgeV2 is
     uint8 private constant _LEAF_TYPE_MESSAGE = 1;
 
     // Nullifier offset
-    uint256 private constant _MAX_LEAFS_PER_NETWORK = 2 ** 32;
+    uint256 internal constant _MAX_LEAFS_PER_NETWORK = 2 ** 32;
 
     // Indicate where's the mainnet flag bit in the global index
     uint256 private constant _GLOBAL_INDEX_MAINNET_FLAG = 2 ** 64;
@@ -205,7 +205,7 @@ contract PolygonZkEVMBridgeV2 is
      * @param destinationNetwork Network destination
      * @param destinationAddress Address destination
      * @param amount Amount of tokens
-     * @param token Token address, 0 address is reserved for ether
+     * @param token Token address, 0 address is reserved for gas token address. If WETH address is zero, means this gas token is ether, else means is a custom erc20 gas token
      * @param forceUpdateGlobalExitRoot Indicates if the new global exit root is updated or not
      * @param permitData Raw data of the call `permit` of the token
      */
@@ -689,7 +689,7 @@ contract PolygonZkEVMBridgeV2 is
      * Since the metadata has relevance in the address deployed, this function will not return a valid
      * wrapped address if the metadata provided is not the original one.
      * @param originNetwork Origin network
-     * @param originTokenAddress Origin token address, 0 address is reserved for ether
+     * @param originTokenAddress Origin token address, 0 address is reserved for gas token address. If WETH address is zero, means this gas token is ether, else means is a custom erc20 gas token
      * @param name Name of the token
      * @param symbol Symbol of the token
      * @param decimals Decimals of the token
@@ -726,7 +726,7 @@ contract PolygonZkEVMBridgeV2 is
     /**
      * @notice Returns the address of a wrapper using the token information if already exist
      * @param originNetwork Origin network
-     * @param originTokenAddress Origin token address, 0 address is reserved for ether
+     * @param originTokenAddress Origin token address, 0 address is reserved for gas token address. If WETH address is zero, means this gas token is ether, else means is a custom erc20 gas token
      */
     function getTokenWrappedAddress(
         uint32 originNetwork,
@@ -839,7 +839,7 @@ contract PolygonZkEVMBridgeV2 is
     function isClaimed(
         uint32 leafIndex,
         uint32 sourceBridgeNetwork
-    ) external view returns (bool) {
+    ) external view virtual returns (bool) {
         uint256 globalIndex;
 
         // For consistency with the previous setted nullifiers
@@ -867,7 +867,7 @@ contract PolygonZkEVMBridgeV2 is
     function _setAndCheckClaimed(
         uint32 leafIndex,
         uint32 sourceBridgeNetwork
-    ) private {
+    ) internal virtual {
         uint256 globalIndex;
 
         // For consistency with the previous setted nullifiers
@@ -943,7 +943,7 @@ contract PolygonZkEVMBridgeV2 is
      */
     function _bitmapPositions(
         uint256 index
-    ) private pure returns (uint256 wordPos, uint256 bitPos) {
+    ) internal pure returns (uint256 wordPos, uint256 bitPos) {
         wordPos = uint248(index >> 8);
         bitPos = uint8(index);
     }
@@ -958,7 +958,7 @@ contract PolygonZkEVMBridgeV2 is
         address token,
         uint256 amount,
         bytes calldata permitData
-    ) internal {
+    ) internal virtual {
         bytes4 sig = bytes4(permitData[:4]);
         if (sig == _PERMIT_SIGNATURE) {
             (
@@ -1182,7 +1182,7 @@ contract PolygonZkEVMBridgeV2 is
      * Since the metadata has relevance in the address deployed, this function will not return a valid
      * wrapped address if the metadata provided is not the original one.
      * @param originNetwork Origin network
-     * @param originTokenAddress Origin token address, 0 address is reserved for ether
+     * @param originTokenAddress Origin token address, 0 address is reserved for gas token address. If WETH address is zero, means this gas token is ether, else means is a custom erc20 gas token
      * @param token Address of the token to calculate the wrapper address
      */
     function calculateTokenWrapperAddress(

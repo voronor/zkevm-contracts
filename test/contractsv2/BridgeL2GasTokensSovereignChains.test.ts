@@ -77,7 +77,7 @@ describe("SovereignChainBridge Gas tokens tests", () => {
         );
         sovereignChainGlobalExitRootContract = (await upgrades.deployProxy(
             GlobalExitRootManagerL2SovereignChainFactory,
-            [deployer.address], // Initializer params
+            [deployer.address, deployer.address], // Initializer params
             {
                 initializer: "initialize", // initializer function name
                 constructorArgs: [sovereignChainBridgeContract.target], // Constructor arguments
@@ -98,6 +98,20 @@ describe("SovereignChainBridge Gas tokens tests", () => {
         gasTokenNetwork = 0;
         gasTokenMetadata = metadataToken;
 
+        await expect(
+            sovereignChainBridgeContract.initialize(
+                networkIDRollup2,
+                polTokenContract.target,
+                0, // zero for ether
+                sovereignChainGlobalExitRootContract.target,
+                rollupManager.address,
+                metadataToken,
+                ethers.Typed.address(bridgeManager.address),
+                ethers.ZeroAddress,
+                true, // Not false, revert
+            )
+        ).to.be.revertedWithCustomError(sovereignChainBridgeContract, "InvalidSovereignWETHAddressParams");
+
         await sovereignChainBridgeContract.initialize(
             networkIDRollup2,
             polTokenContract.target, // zero for ether
@@ -107,7 +121,7 @@ describe("SovereignChainBridge Gas tokens tests", () => {
             metadataToken,
             ethers.Typed.address(bridgeManager.address),
             ethers.ZeroAddress,
-            false
+            false,
         );
 
         // calculate the weth address:

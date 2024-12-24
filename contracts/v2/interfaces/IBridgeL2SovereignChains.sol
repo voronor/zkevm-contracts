@@ -22,11 +22,6 @@ interface IBridgeL2SovereignChains is IPolygonZkEVMBridgeV2 {
     error OnlyBridgeManager();
 
     /**
-     * @dev Thrown when bridge manager address is invalid
-     */
-    error NotValidBridgeManager();
-
-    /**
      * @dev Thrown when trying to remove a token mapping that has not been updated by a new one
      */
     error TokenNotMapped();
@@ -65,7 +60,15 @@ interface IBridgeL2SovereignChains is IPolygonZkEVMBridgeV2 {
      * @dev Thrown when trying to set a custom wrapper for weth on a gas token network
      */
     error WETHRemappingNotSupportedOnGasTokenNetworks();
+    /**
+     * @dev Thrown when trying to unset a not setted claim
+     */
+    error ClaimNotSet();
 
+    /**
+     * @dev Thrown when trying to activate emergency state in a not allowed bridge context (e.g. sovereign chains)
+     */
+    error EmergencyStateNotAllowed();
 
     function initialize(
         uint32 _networkID,

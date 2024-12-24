@@ -9,6 +9,12 @@ const ConsensusTypes = {
     Ecdsa: 0,
 };
 
+const ConsensusContracts = {
+    PolygonZkEVMEtrog: 'PolygonZkEVMEtrog',
+    PolygonValidiumEtrog: 'PolygonValidiumEtrog',
+    PolygonPessimisticConsensus: 'PolygonPessimisticConsensus',
+
+};
 /**
  * Compute input for SNARK circuit: sha256(
  * initStateRoot, initBlobStateRoot, initBlobAccInputHash, initNumBlob, chainId, forkID
@@ -60,4 +66,5 @@ module.exports = {
     ConsensusTypes,
     computeInputPessimisticBytes,
     computeConsensusHashEcdsa,
+    ConsensusContracts,
 };

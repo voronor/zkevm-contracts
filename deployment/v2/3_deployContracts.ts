@@ -418,18 +418,12 @@ async function main() {
                     PolygonRollupManagerFactory,
                     [
                         trustedAggregator,
-                        pendingStateTimeout,
-                        trustedAggregatorTimeout,
                         admin,
                         timelockAddressRollupManager,
                         emergencyCouncilAddress,
-                        ethers.ZeroAddress, // unused parameter
-                        ethers.ZeroAddress, // unused parameter
-                        0, // unused parameter
-                        0, // unused parameter
                     ],
                     {
-                        initializer: "initialize(address,uint64,uint64,address,address,address,address,address,uint64,uint64)",
+                        initializer: "initialize(address,address,address,address)",
                         constructorArgs: [
                             polygonZkEVMGlobalExitRoot?.target,
                             polTokenAddress,

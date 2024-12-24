@@ -81,12 +81,14 @@ async function main() {
         if (consensusContract !== "PolygonPessimisticConsensus") {
             throw new Error(`Vanilla client only supports PolygonPessimisticConsensus`);
         }
+
         // Check sovereign params
         const mandatorySovereignParams = [
             "bridgeManager",
             "sovereignWETHAddress",
             "sovereignWETHAddressIsNotMintable",
             "globalExitRootUpdater",
+            "globalExitRootRemover",
         ];
         for (const parameterName of mandatorySovereignParams) {
             if (typeof sovereignParams[parameterName] === undefined || sovereignParams[parameterName] === "") {
@@ -268,6 +270,7 @@ async function main() {
     ) {
         // Get token metadata
         gasTokenMetadata = await polygonZkEVMBridgeContract.getTokenMetadata(createRollupParameters.gasTokenAddress);
+        outputJson.gasTokenMetadata = gasTokenMetadata;
         // If gas token metadata includes `0x124e4f545f56414c49445f454e434f44494e47 (NOT_VALID_ENCODING)` means there is no erc20 token deployed at the selected gas token network
         if (gasTokenMetadata.includes("124e4f545f56414c49445f454e434f44494e47")) {
             throw new Error(
@@ -291,7 +294,7 @@ async function main() {
         gasTokenNetwork = 0;
         gasTokenMetadata = "0x";
     }
-
+    outputJson.gasTokenAddress = gasTokenAddress;
     const nonce = await currentProvider.getTransactionCount(rollupManagerContract.target);
     const newZKEVMAddress = ethers.getCreateAddress({
         from: rollupManagerContract.target as string,
@@ -374,7 +377,9 @@ async function main() {
     }
 
     let batchData = "";
-    // If is vanilla client, replace genesis by sovereign contracts, else, inject initialization batch
+    /**
+    If the system is running a "vanilla client" (i.e., a basic, unmodified Ethereum client or rollup setup), the genesis block should include the deployment of the sovereign contracts, and these contracts should already be initialized with their required initial state and configurations. This means that the genesis block will contain the initial state for these contracts, allowing the system to start running without needing any additional initialization steps. However, for other rollups, additional configuration is needed. In this case, instead of having everything pre-initialized in the genesis block, we must inject an "initialization batch" into the genesis file. This batch will contain specific instructions for initializing the contracts at the time of rollup deployment. The injected initialization batch allows the system to be configured dynamically during deployment.
+     */
     if (isVanillaClient) {
         const initializeParams = {
             rollupID: rollupID,
@@ -386,6 +391,7 @@ async function main() {
             sovereignWETHAddress: sovereignParams.sovereignWETHAddress,
             sovereignWETHAddressIsNotMintable: sovereignParams.sovereignWETHAddressIsNotMintable,
             globalExitRootUpdater: sovereignParams.globalExitRootUpdater,
+            globalExitRootRemover: sovereignParams.globalExitRootRemover,
         };
         genesis = await updateVanillaGenesis(genesis, chainID, initializeParams);
         // Add weth address to deployment output if gas token address is provided and sovereignWETHAddress is not provided
@@ -476,6 +482,8 @@ async function main() {
     outputJson.rollupAddress = newZKEVMAddress;
     outputJson.verifierAddress = verifierContract.target;
     outputJson.consensusContract = consensusContract;
+    outputJson.consensusContractAddress = PolygonconsensusContract.target;
+    outputJson.rollupTypeId = newRollupTypeID;
 
     // Rewrite updated genesis in case of vanilla client
     if (isVanillaClient) {

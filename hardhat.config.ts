@@ -90,7 +90,7 @@ const config: HardhatUserConfig = {
                 settings: {
                     optimizer: {
                         enabled: true,
-                        runs: 500,
+                        runs: 500, // Should have the same optimizations as PolygonTransparentProxy
                     },
                     evmVersion: "shanghai",
                 }, // try yul optimizer
@@ -110,7 +110,7 @@ const config: HardhatUserConfig = {
                 settings: {
                     optimizer: {
                         enabled: true,
-                        runs: 200,
+                        runs: 500, // Should have the same optimizations as PolygonTransparentProxy
                     },
                     evmVersion: "shanghai",
                 }, // try yul optimizer
@@ -120,7 +120,7 @@ const config: HardhatUserConfig = {
                 settings: {
                     optimizer: {
                         enabled: true,
-                        runs: 10,
+                        runs: 500, // Should have the same optimizations as PolygonTransparentProxy
                     },
                     evmVersion: "shanghai",
                 }, // try yul optimizer
